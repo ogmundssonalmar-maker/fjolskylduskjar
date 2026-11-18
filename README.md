@@ -10,7 +10,7 @@ Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni.
 
 ## Cloudflare Pages
 
-1. Staðfestið að GitHub-geymslan sé **Private** áður en hýsing er tengd. V2 gögn eru í Git-sögunni.
+1. GitHub-geymslan má vera opin á meðan unnið er með kóðann. Eldri v2 gögn eru í núverandi Git-sögu. Geymið ný fjölskyldugögn í vernduðum gagnagrunni og leyndarmál í Cloudflare-stillingum.
 2. Tengið geymsluna við Cloudflare Pages með `main` sem production-grein, `npm run build` sem byggingarskipun og `dist` sem úttaksmöppu. Veljið Node.js 22 eða nýrra. Haldið sjálfvirkum preview-útgáfum óvirkum þar til Access-reglur fyrir þær eru tilbúnar.
 3. Setjið upp Cloudflare Access fyrir production og öll notuð sérlén. Virkið Access fyrir preview í Pages og yfirfarið að bæði greinavísar og útgáfuslóðir falli undir regluna. Leyfið aðeins netföng foreldranna. Ef Access nær ekki yfir tiltekið hýsingarheiti þarf Functions-vörnin áfram að skila 403 þar.
 4. Stillið eftirfarandi breytur í Pages Functions fyrir hvort umhverfi. Notið eingöngu AUD-gildi Access-forrita sem eiga við um það umhverfi. Geymið netföngin í Cloudflare-stillingum.
