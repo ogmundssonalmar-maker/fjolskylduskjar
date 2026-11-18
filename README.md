@@ -28,3 +28,17 @@ Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni.
 - Úr óinnskráðum vafra skulu `/`, `/index.html` og `/api/test` skila Access-innskráningu eða aðgangsbanni. Prófið production, upprunalegt `pages.dev` heiti, tengd sérlén og allar virkar preview-slóðir. Athugið að Access-auðkenning er einnig virk fyrir eldri útgáfur eða fjarlægið þær áður en raunveruleg gögn eru flutt inn.
 - Prófið að hvort foreldri komist inn og að utanaðkomandi netfang fái synjun.
 - Athugið `Cache-Control: private, no-store` á vernduðu síðunni og að niðurstaðan á `dist` innihaldi aðeins `index.html` og `_routes.json`. Rót Git-geymslunnar er ekki birtingarmappa.
+
+## Samstilling á Worker-útgáfunni
+
+1. Stofnið D1 og bætið `[[d1_databases]]` með `binding = "DB"`, `database_name` og `database_id` við `wrangler.worker.toml` eða tengið gagnagrunninn í Cloudflare. Keyrið `wrangler d1 migrations apply DB --remote --config wrangler.worker.toml` þegar D1-tengingin liggur fyrir.
+2. Stillið Cloudflare Access fyrir Worker-slóðina í **Settings → Domains & Routes**, með heimiluðum netföngum foreldra. Setjið `ACCESS_TEAM_DOMAIN`, `ACCESS_AUDIENCES` og `ACCESS_PARENT_EMAILS` fyrir Worker. Staðfestið að óinnskráðar beiðnir á `/api/household` og `/api/calendar` fái synjun. Sama API er í boði sem Pages Functions með D1-bindingu `DB`.
+3. Byggið með `npm ci && npm run build` og birtið með `wrangler deploy --config wrangler.worker.toml`. Ef birting fer fram í gegnum Git, stillið byggingar- og birtingarskipanirnar þar og veljið greinina með Worker-kóðanum.
+4. Veljið hvaða tæki á að leggja til upphafsgögnin. Fyrsta vistanlega breytingin á því tæki fyllir tóman gagnagrunn með verkefnum og matseðli tækisins. Staðbundin gögn geymast áfram í upprunalega vafranum. Skjárinn athugar breytingar á 15 sekúndna fresti.
+
+### Google Calendar
+
+- Virkið Google Calendar API í Google Cloud fyrir OAuth-forritið. Búið til OAuth-vefforrit með staðfestu samþykkisferli og notið `https://www.googleapis.com/auth/calendar.events.readonly`. Tengda Google-auðkennið þarf að hafa lesaðgang að völdum dagatölum.
+- Fáið refresh token með eigin OAuth-auðkenni og offline access, til dæmis í Google OAuth Playground með eigin OAuth-stillingum og skráðri redirect-slóð `https://developers.google.com/oauthplayground`. Refresh token fyrir ytri OAuth-forrit í Testing getur runnið út eftir sjö daga.
+- Setjið `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` í Cloudflare Secrets. Setjið `GOOGLE_CALENDAR_IDS` í Cloudflare sem lista yfir dagatalsauðkenni aðskilin með kommum. Auðkennið fyrir Fjölskyldudagatalið er í stillingum dagatalsins undir **Integrate calendar**.
+- Staðfestið innskráningu og að skjárinn sýni einn þekktan viðburð úr réttu dagatali. Skjárinn sækir næstu 45 daga og athugar breytingar á fimm mínútna fresti.

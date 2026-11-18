@@ -12,7 +12,7 @@
 @media print{.tabs,.status,.bottomline,.textbutton,.newtask,button{display:none!important}body{background:white}.shell{max-width:none}.card{break-inside:avoid;box-shadow:none}}
 </style></head><body>
 <div class="shell">
-<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><strong>Frumgerð · ekki í rauntíma</strong><br>Verkefni og matseðill vistast í þessum vafra</div></header>
+<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><strong id="syncStatus" role="status">Verkefni og matseðill vistast í þessum vafra.</strong><br><span id="calendarStatus">Google Calendar hefur ekki verið tengt.</span></div></header>
 <nav class="tabs" id="tabs" aria-label="Valmynd"><button data-page="home" class="active">Yfirlit</button><button data-page="week">Dagskrá</button><button data-page="food">Matseðill</button><button data-page="nursery">Marbakki</button><button data-page="journeys">Ferðir</button><button data-page="todos">Verkefni</button></nav>
 <section class="page active" data-page="home">
  <div class="headline"><div><div class="eyebrow" id="headerWeek">Fjölskyldudagurinn</div><h1 id="todayLabel">Góðan daginn</h1><p class="lede">Það sem er á dagskrá, þarf að muna og verður í matinn.</p></div><div class="weather"><div class="symbol">◌</div><b>Veðurspá</b><small>Til að tengja síðar</small></div></div>
@@ -26,18 +26,18 @@
  </div></div>
 </section>
 <section class="page" data-page="week"><div class="page-intro"><div class="eyebrow">Dagskráin</div><h1>Vikan okkar</h1><p>Viðburðir án klukkustundatöflu. Tímar birtast aðeins þegar þeir eru skráðir á viðburði.</p></div><div class="card"><div class="weekactions"><button onclick="moveWeek(-7)">← Fyrri vika</button><strong id="weekRange"></strong><button onclick="moveWeek(7)">Næsta vika →</button><button onclick="resetWeek()">Þessi vika</button></div><div class="day-grid" id="weekGrid"></div></div></section>
-<section class="page" data-page="food"><div class="page-intro"><div class="eyebrow">Matarplanið</div><h1>Vikumatseðillinn</h1><p>Byggður á uppskriftum úr Krónunni. Hér má breyta réttum; breytingar vistast staðbundið.</p></div><div class="two"><article class="card"><div id="menuAll"></div></article><article class="card"><h2>Innkaupin</h2><p class="sub">Næsti áfangi: sjálfvirkur innkaupalisti eftir samþykki matseðils.</p><div class="warning">Krónutengingin er aðgengileg í ChatGPT en ekki enn tengd þessari HTML-síðu. Engin pöntun eða lifandi verðleit fer fram hér.</div><div class="links"><a target="_blank" rel="noopener noreferrer" href="https://kronan.is/snjallverslun/uppskriftir">Skoða uppskriftir í Snjallverslun ↗</a></div></article></div></section>
+<section class="page" data-page="food"><div class="page-intro"><div class="eyebrow">Matarplanið</div><h1>Vikumatseðillinn</h1><p>Hér má breyta réttum og uppskriftatenglum.</p></div><div class="two"><article class="card"><div id="menuAll"></div></article><article class="card"><h2>Innkaupin</h2><p class="sub">Næsti áfangi: sjálfvirkur innkaupalisti eftir samþykki matseðils.</p><div class="warning">Krónutengingin er aðgengileg í ChatGPT en ekki enn tengd þessari HTML-síðu. Engin pöntun eða lifandi verðleit fer fram hér.</div><div class="links"><a target="_blank" rel="noopener noreferrer" href="https://kronan.is/snjallverslun/uppskriftir">Skoða uppskriftir í Snjallverslun ↗</a></div></article></div></section>
 <section class="page" data-page="nursery"><div class="page-intro"><div class="eyebrow">Marbakki · 2026–2027</div><h1>Leikskóladagatalið</h1><p>Skipulagsdagar, skráningardagar og viðburðir foreldra.</p></div><article class="card"><div id="schoolList"></div></article></section>
 <section class="page" data-page="journeys"><div class="page-intro"><div class="eyebrow">Frí og ferðalög</div><h1>Ferðir fram undan</h1><p>Yfirlit yfir ferðir og áhrif þeirra á fjölskyldudagskrána.</p></div><div class="two" id="tripList"></div></section>
-<section class="page" data-page="todos"><div class="page-intro"><div class="eyebrow">Sameiginleg mál</div><h1>Verkefnalistinn</h1><p>Hægt er að bæta við, haka við og eyða. Til að deila milli tveggja síma þarf gagnagrunn og innskráningu síðar.</p></div><article class="card"><div id="allTasks"></div><div class="newtask"><input id="newTask" placeholder="Bæta við verkefni…" maxlength="180" aria-label="Nýtt verkefni"><button onclick="addTask()">Bæta við</button></div></article></section>
-<footer class="bottomline"><span>Heimilið · Google Calendar hefur ekki verið tengt.</span><span>Frumgerð fyrir fjölskylduna · Ekki birta opið á netinu með persónuupplýsingum.</span></footer>
+<section class="page" data-page="todos"><div class="page-intro"><div class="eyebrow">Sameiginleg mál</div><h1>Verkefnalistinn</h1><p>Hægt er að bæta við, breyta, haka við og eyða.</p></div><article class="card"><div id="allTasks"></div><div class="newtask"><input id="newTask" placeholder="Bæta við verkefni…" maxlength="180" aria-label="Nýtt verkefni"><button onclick="addTask()">Bæta við</button></div></article></section>
+<footer class="bottomline"><span>Heima hjá okkur</span></footer>
 </div>
 <script>
 const school = [];
 const trips = [];
 const calendar = [];
 const defaultMeals = [{"day":"Mán","name":"Hakk og spaghetti","minutes":20,"url":"https://kronan.is/uppskriftir/hakk_spaghetti"},{"day":"Þri","name":"Kjúklingur í tikka masala","minutes":20,"url":"https://kronan.is/uppskriftir/kjuklingur_tikkamasala"},{"day":"Mið","name":"Plokkfiskur","minutes":50,"url":"https://kronan.is/uppskriftir/plokkfiskur"},{"day":"Fim","name":"Kjúklinga Alfredo pasta","minutes":30,"url":"https://kronan.is/uppskriftir/alfredo"},{"day":"Fös","name":"Heimagerð pítsa","minutes":null,"url":""},{"day":"Lau","name":"Frjáls dagur / afgangar","minutes":null,"url":""},{"day":"Sun","name":"Rjóma-pestó kjúklingur","minutes":30,"url":"https://kronan.is/uppskriftir/rjomapesto_kjuklingur"}];
-const allEvents=[...school,...trips,...calendar].sort((a,b)=>a.start.localeCompare(b.start));
+let allEvents=[...school,...trips,...calendar].sort((a,b)=>a.start.localeCompare(b.start));
 const formatDate = (s,opts={})=>new Intl.DateTimeFormat('is-IS',{timeZone:'UTC',...opts}).format(new Date(s+'T12:00:00Z'));
 const dateOf=s=>new Date(s+'T12:00:00Z');
 const iso=d=>d.toISOString().slice(0,10);
@@ -70,12 +70,135 @@ function renderToday(){document.getElementById('todayLabel').textContent=formatD
  const d=dateOf(today);const idx=(d.getUTCDay()+6)%7;const item=meals[idx]||{name:'Ekki ákveðið'};document.getElementById('dinnerToday').innerHTML=`<div class="meal-focus"><div class="label">Kvöldmatur dagsins · tillaga</div><h3>${xss(item.name)}</h3><div class="small">${item.minutes?xss(item.minutes)+' mínútur · ':''}${recipeUrl(item.url)?`<a href="${xss(recipeUrl(item.url))}" target="_blank" rel="noopener noreferrer">Opna uppskrift ↗</a>`:'Engin uppskrift tengd'}</div></div>`;
  document.getElementById('nextDinners').innerHTML=[1,2,3].map(n=>{const di=(idx+n)%7;return `<div class="minimeal"><span class="when">${shortDays[di]}</span><b>${xss((meals[di]||{}).name||'Óákveðið')}</b></div>`}).join('');
 }
-function renderTasks(){let open=tasks.filter(t=>!t.done);const mk=(t,i,full)=>`<label class="check ${t.done?'done':''}"><input type="checkbox" onchange="toggleTask(${i})" ${t.done?'checked':''}><span>${xss(t.name)}</span>${full?`<button type="button" aria-label="Eyða verkefni" onclick="event.preventDefault();event.stopPropagation();deleteTask(${i})">×</button>`:''}</label>`;document.getElementById('tasksMini').innerHTML=open.length?open.slice(0,4).map(t=>mk(t,tasks.indexOf(t),false)).join(''):'<p class="empty">Öll verkefni búin.</p>';document.getElementById('allTasks').innerHTML=tasks.map((t,i)=>mk(t,i,true)).join('')||'<p class="empty">Engin verkefni.</p>'}
-function toggleTask(i){tasks[i].done=!tasks[i].done;store('family-tasks-v2',tasks);renderTasks()}
-function deleteTask(i){tasks.splice(i,1);store('family-tasks-v2',tasks);renderTasks()}
-function addTask(){const input=document.getElementById('newTask');const value=input.value.trim();if(!value)return;tasks.push({name:value,done:false});input.value='';store('family-tasks-v2',tasks);renderTasks()}
-document.getElementById('newTask').addEventListener('keydown',e=>{if(e.key==='Enter')addTask()});
-function editMeal(i){const value=prompt('Hvað verður í matinn?',meals[i].name);if(value===null)return;const name=value.trim();if(!name)return;meals[i]={...meals[i],name,url:'',minutes:null};store('family-menu-v2',meals);renderMeals();renderToday()}
+function renderTasks(){let open=tasks.filter(t=>!t.done);const mk=(t,i,full)=>`<label class="check ${t.done?'done':''}"><input type="checkbox" onchange="toggleTask(${i})" ${t.done?'checked':''}><span>${xss(t.name)}</span>${full?`<button type="button" aria-label="Breyta verkefni" onclick="event.preventDefault();editTask(${i})">Breyta</button><button type="button" aria-label="Eyða verkefni" onclick="event.preventDefault();deleteTask(${i})">×</button>`:''}</label>`;document.getElementById('tasksMini').innerHTML=open.length?open.slice(0,4).map(t=>mk(t,tasks.indexOf(t),false)).join(''):'<p class="empty">Öll verkefni búin.</p>';document.getElementById('allTasks').innerHTML=tasks.map((t,i)=>mk(t,i,true)).join('')||'<p class="empty">Engin verkefni.</p>'}
+let version = null;
+let saving = false;
+const syncStatus = document.getElementById('syncStatus');
+const calendarStatus = document.getElementById('calendarStatus');
+
+function renderShared() {
+  renderTasks();
+  renderMeals();
+  renderToday();
+}
+
+async function refreshShared() {
+  if (saving) return;
+  try {
+    const response = await fetch('/api/household', { cache: 'no-store' });
+    if (!response.ok) throw new Error();
+    const state = await response.json();
+    if (saving || (version !== null && state.version < version)) return;
+    if (state.version !== version && state.version > 0) {
+      tasks = state.tasks;
+      meals = state.meals;
+      renderShared();
+    }
+    version = state.version;
+    syncStatus.textContent = version === 0
+      ? 'Fyrsta vistun deilir verkefnum og matseðli úr þessum vafra.'
+      : 'Verkefni og matseðill samstillt milli tækja.';
+  } catch {
+    if (version !== null) syncStatus.textContent = 'Samstilling rofnaði. Reynt verður aftur.';
+  }
+}
+
+async function refreshCalendar() {
+  try {
+    const response = await fetch('/api/calendar', { cache: 'no-store' });
+    if (response.status === 403 && calendarStatus.dataset.connected !== 'true') return;
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    allEvents = [...school, ...trips, ...(data.connected ? data.events : calendar)]
+      .sort((a, b) => a.start.localeCompare(b.start));
+    calendarStatus.dataset.connected = String(data.connected);
+    calendarStatus.textContent = data.connected ? 'Google Calendar uppfært ' +
+      new Intl.DateTimeFormat('is-IS', { timeStyle: 'short', timeZone: 'Atlantic/Reykjavik' }).format(new Date())
+      : 'Google Calendar hefur ekki verið tengt.';
+    renderToday();
+    renderWeek();
+  } catch {
+    calendarStatus.textContent = 'Ekki náðist í Google Calendar.';
+  }
+}
+
+async function saveChange(change) {
+  if (saving) {
+    renderShared();
+    return false;
+  }
+  const draft = structuredClone({ tasks, meals, version });
+  change(draft);
+  if (version !== null) {
+    saving = true;
+    try {
+      const response = await fetch('/api/household', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      if (response.status === 409) {
+        saving = false;
+        await refreshShared();
+        syncStatus.textContent = 'Breyting barst úr öðru tæki. Reyndu breytinguna aftur.';
+        return false;
+      }
+      if (!response.ok) throw new Error();
+      version = (await response.json()).version;
+      syncStatus.textContent = 'Verkefni og matseðill samstillt milli tækja.';
+    } catch {
+      renderShared();
+      syncStatus.textContent = 'Vistun mistókst. Reyndu aftur.';
+      return false;
+    } finally {
+      saving = false;
+    }
+  } else {
+    store('family-tasks-v2', draft.tasks);
+    store('family-menu-v2', draft.meals);
+  }
+  ({ tasks, meals } = draft);
+  renderShared();
+  return true;
+}
+
+function toggleTask(i) {
+  return saveChange(draft => { draft.tasks[i].done = !draft.tasks[i].done; });
+}
+
+function deleteTask(i) {
+  return saveChange(draft => { draft.tasks.splice(i, 1); });
+}
+
+function editTask(i) {
+  const name = prompt('Breyta verkefni', tasks[i].name)?.trim();
+  if (name && name.length <= 180) return saveChange(draft => { draft.tasks[i].name = name; });
+}
+
+async function addTask() {
+  const input = document.getElementById('newTask');
+  const name = input.value.trim();
+  if (name && await saveChange(draft => { draft.tasks.push({ name, done: false }); }) && input.value.trim() === name) {
+    input.value = '';
+  }
+}
+
+function editMeal(i) {
+  const previous = meals[i];
+  const name = prompt('Hvað verður í matinn?', previous.name)?.trim();
+  if (!name || name.length > 180) return;
+  const link = prompt('Uppskriftaslóð (valfrjáls)', name === previous.name ? previous.url : '');
+  if (link === null) return;
+  const url = recipeUrl(link.trim());
+  if (link.trim() && !url) {
+    alert('Notaðu gilda HTTPS- eða HTTP-slóð.');
+    return;
+  }
+  return saveChange(draft => {
+    draft.meals[i] = { ...previous, name, url, minutes: name === previous.name ? previous.minutes : null };
+  });
+}
+
 function renderMeals(){document.getElementById('menuAll').innerHTML=meals.map((m,i)=>`<div class="menu-row"><span style="font-size:12px;font-weight:800;color:var(--muted)">${xss(m.day)}</span><div><strong>${recipeUrl(m.url)?`<a href="${xss(recipeUrl(m.url))}" target="_blank" rel="noopener noreferrer">${xss(m.name)} ↗</a>`:xss(m.name)}</strong><small>${m.minutes?xss(m.minutes)+' mín.': 'Dæmimatseðill'}</small></div><button onclick="editMeal(${i})">Breyta</button></div>`).join('')}
 function startMonday(d){return plusDays(d,-((d.getUTCDay()+6)%7))}
 function moveWeek(n){viewDate=plusDays(viewDate,n);renderWeek()}
@@ -83,5 +206,11 @@ function resetWeek(){viewDate=dateOf(today);renderWeek()}
 function renderWeek(){const m=startMonday(viewDate),end=plusDays(m,6);document.getElementById('weekRange').textContent=`${formatDate(iso(m),{day:'numeric',month:'short'})} – ${formatDate(iso(end),{day:'numeric',month:'short',year:'numeric'})}`;document.getElementById('weekGrid').innerHTML=Array.from({length:7},(_,i)=>{const d=plusDays(m,i),s=iso(d);const events=allEvents.filter(e=>overlaps(e,s));return `<div class="day ${s===today?'today':''}"><strong>${xss(shortDays[i])}<em>${d.getUTCDate()}</em></strong>${events.map(e=>`<div class="dayev ${xss(e.type)}">${e.time?xss(e.time)+' · ':''}${xss(e.title)}</div>`).join('')||'<p class="empty">Engin færsla</p>'}</div>`}).join('')}
 function renderSchool(){const upcoming=school.filter(e=>e.end>=today);let month='';let html='';for(const e of upcoming){const m=e.start.slice(0,7);if(m!==month){month=m;html+=`<h3 class="month-title">${formatDate(m+'-01',{month:'long',year:'numeric'})}</h3>`}html+=`<div class="schoolitem"><span>${formatDate(e.start,{day:'numeric',month:'short'})}${e.start===e.end?'':' – '+formatDate(e.end,{day:'numeric',month:'short'})}</span><div><b>${xss(e.title)} <span class="badge ${xss(e.type)}">${xss(typeLabel[e.type]||'Viðburður')}</span></b><p>${xss(e.note||'')}</p></div></div>`}document.getElementById('schoolList').innerHTML=html||'<p class="empty">Engir leikskólaviðburðir skráðir.</p>'}
 function renderTrips(){document.getElementById('tripList').innerHTML=trips.map(t=>`<article class="card"><div class="tripitem"><div class="eyebrow">Ferð</div><h3>${xss(t.title)}</h3><p>${formatDate(t.start,{day:'numeric',month:'long',year:'numeric'})} – ${formatDate(t.end,{day:'numeric',month:'long',year:'numeric'})}</p></div><p class="help">${xss(t.note)}</p></article>`).join('')||'<p class="empty">Engar ferðir skráðar.</p>'}
-renderToday();renderTasks();renderMeals();renderWeek();renderSchool();renderTrips();
+renderShared();renderWeek();renderSchool();renderTrips();
+if (location.protocol === 'https:' || location.protocol === 'http:') {
+  refreshShared();
+  refreshCalendar();
+  setInterval(refreshShared, 15000);
+  setInterval(refreshCalendar, 5 * 60000);
+}
 </script></body></html>
