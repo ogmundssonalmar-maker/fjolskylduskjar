@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "npm run build && node --test",
-    "build:pages": "npm run build && esbuild src/pages-upload.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js"
+    "build:pages": "npm run build && rm -f dist/_routes.json && esbuild src/pages-upload.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js"
   },
   "dependencies": {
     "jose": "^6.2.0"

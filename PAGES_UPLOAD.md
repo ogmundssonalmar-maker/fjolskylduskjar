@@ -9,6 +9,6 @@
 
 ## Smíða ZIP
 
-Keyrið `npm ci`, `npm test` og `npm run build:pages`. Setjið `index.html`, `_routes.json` og `_worker.js` úr `dist` í rót ZIP-skrárinnar.
+Keyrið `npm ci`, `npm test` og `npm run build:pages`. Setjið `index.html` og `_worker.js` úr `dist` í rót ZIP-skrárinnar.
 
 Til að prófa pakkann með Wrangler Pages Dev skal keyra `wrangler pages dev <slóð-að-afritaðri-dist-möppu>` úr annarri möppu en Worker-geymslunni og stilla `APP_PASSWORD` fyrir prófið.
