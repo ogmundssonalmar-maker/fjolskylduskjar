@@ -18,9 +18,9 @@ test('build serves only the page and applies Functions to every path', async () 
     version: 1, include: ['/*'], exclude: [],
   });
   const html = await readFile('dist/index.html', 'utf8');
-  for (const source of ['school', 'trips', 'calendar']) {
-    assert.ok(html.includes('const ' + source + ' = [];'));
-  }
+  assert.match(html, /const school = \[.*2027-01-04/);
+  assert.match(html, /const trips = \[.*2026-12-27.*2027-01-03.*2027-01-23.*2027-01-30/);
+  assert.match(html, /const calendar = \[\{/);
   assert.ok(html.includes("let tasks=load('family-tasks-v2',[]);"));
 });
 
@@ -71,6 +71,7 @@ test('Access requires a signed, current token for the app and an allowed parent'
     assert.equal(await request('/', await sign(claims)), 403);
   }
   assert.equal(await request('/', await sign()), 200);
+  assert.equal(await request('/', await sign(), { ...env, ACCESS_PARENT_EMAILS: '' }), 200);
   assert.equal(await request('/api/test', await sign(), env, true), 200);
   assert.equal(await request('/api/test', 'invalid', env, true), 403);
   assert.equal(await request('/index.html', await sign({

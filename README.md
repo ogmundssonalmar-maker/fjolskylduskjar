@@ -6,7 +6,7 @@
 
 Keyrið `npm ci` og `npm test` með Node.js 22 eða nýrra. `npm run build` býr til `dist/`. Til að skoða viðmótið staðbundið má opna `index.html` beint. Verkefni og breytingar á dæmimatseðli vistast í viðkomandi vafra. Sameiginleg vistun, lifandi dagatal og veður bíða síðari áfanga.
 
-Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni. Hún inniheldur dæmimatseðil. V2 gögnin eru í fyrri útgáfu og eiga heima í vernduðum gagnagrunni þegar aðgangsstýring hefur verið staðfest. Berið leikskóladagsetningar undir PDF-heimildina fyrir innflutning.
+Skjárinn sýnir vistaða dagskrá úr v2 á meðan Google Calendar er ótengt. Hann sýnir einnig ferðirnar og staðfestan skipulagsdag 4. janúar. Aðrar leikskóladagsetningar bíða PDF-heimildar.
 
 ## Cloudflare Pages
 

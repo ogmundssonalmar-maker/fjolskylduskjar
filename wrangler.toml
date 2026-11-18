@@ -3,6 +3,13 @@ main = "src/worker.js"
 compatibility_date = "2026-11-18"
 keep_vars = true
 
+[vars]
+ACCESS_TEAM_DOMAIN = "shy-snow-47c2.cloudflareaccess.com"
+ACCESS_AUDIENCES = "fdea7ce218685eec60b396c8f0de04f7d117816543e15be50efcecd6710b7e03"
+
+[observability]
+enabled = true
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"

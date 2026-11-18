@@ -25,7 +25,7 @@ export async function onRequest({ request, env, next }) {
   const audiences = (env.ACCESS_AUDIENCES ?? '').split(',').map(value => value.trim()).filter(Boolean);
   const parents = (env.ACCESS_PARENT_EMAILS ?? '').toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
 
-  if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team ?? '') || !audiences.length || !parents.length) {
+  if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team ?? '') || !audiences.length) {
     return reject('configuration missing or invalid');
   }
   if (!token) return reject('token missing');
@@ -40,9 +40,9 @@ export async function onRequest({ request, env, next }) {
       issuer,
       audience: audiences,
       algorithms: ['RS256'],
-      requiredClaims: ['exp', 'iat', 'email'],
+      requiredClaims: ['exp', 'email'],
     });
-    if (typeof payload.email !== 'string' || !parents.includes(payload.email.toLowerCase())) {
+    if (typeof payload.email !== 'string' || (parents.length > 0 && !parents.includes(payload.email.toLowerCase()))) {
       return reject('email not allowed');
     }
   } catch (error) {

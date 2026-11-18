@@ -10,9 +10,10 @@
 @media(max-width:1000px){.shell{padding:18px 22px}.grid{grid-template-columns:1fr}.day-grid{grid-template-columns:repeat(4,1fr)}.weather{min-width:120px}.two{grid-template-columns:1fr}}
 @media(max-width:650px){.shell{padding:12px 12px 25px}.masthead{padding:8px 2px 17px}.brand-name{font-size:12px}.brand-symbol{width:39px;height:39px;font-size:24px}.status{font-size:10px}.tabs{padding:12px 0;gap:3px}.tabs button{padding:9px 11px;font-size:12px}.headline{align-items:start;margin:10px 0 18px}.headline h1{font-size:37px}.lede{font-size:12px}.weather{padding-left:9px;min-width:65px}.weather .symbol{font-size:21px}.weather b{font-size:11px}.weather small{display:none}.card{padding:18px}.card h2{font-size:22px}.grid,.stack{gap:12px}.day-grid{grid-template-columns:repeat(2,1fr)}.day{min-height:130px}.page-intro h1{font-size:33px}.bottomline{flex-direction:column;align-items:start}.menu-row{grid-template-columns:41px 1fr auto;gap:9px}.menu-row button{font-size:11px;padding:7px}.section-head{gap:8px}.note{padding:13px}}
 @media print{.tabs,.status,.bottomline,.textbutton,.newtask,button{display:none!important}body{background:white}.shell{max-width:none}.card{break-inside:avoid;box-shadow:none}}
+[hidden]{display:none!important}
 </style></head><body>
 <div class="shell">
-<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><strong id="syncStatus" role="status">Verkefni og matseðill vistast í þessum vafra.</strong><br><span id="calendarStatus">Google Calendar hefur ekki verið tengt.</span></div></header>
+<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><strong id="syncStatus" role="status">Verkefni og matseðill vistast í þessum vafra.</strong><br><span id="calendarStatus">Sýni vistað afrit af dagskránni.</span></div></header>
 <nav class="tabs" id="tabs" aria-label="Valmynd"><button data-page="home" class="active">Yfirlit</button><button data-page="week">Dagskrá</button><button data-page="food">Matseðill</button><button data-page="nursery">Marbakki</button><button data-page="journeys">Ferðir</button><button data-page="todos">Verkefni</button></nav>
 <section class="page active" data-page="home">
  <div class="headline"><div><div class="eyebrow" id="headerWeek">Fjölskyldudagurinn</div><h1 id="todayLabel">Góðan daginn</h1><p class="lede">Það sem er á dagskrá, þarf að muna og verður í matinn.</p></div><div class="weather"><div class="symbol">◌</div><b>Veðurspá</b><small>Til að tengja síðar</small></div></div>
@@ -33,9 +34,9 @@
 <footer class="bottomline"><span>Heima hjá okkur</span></footer>
 </div>
 <script>
-const school = [];
-const trips = [];
-const calendar = [];
+const school = [{"start":"2027-01-04","end":"2027-01-04","title":"Skipulagsdagur í Marbakka","type":"lokun","note":"Leikskóli lokaður; daginn eftir heimkomu frá Kanarí"}];
+const trips = [{"start":"2026-12-27","end":"2027-01-03","title":"Fjölskylduferð til Kanarí","type":"ferd","note":"27. desember til 3. janúar; samkvæmt upplýsingum frá fjölskyldu"},{"start":"2027-01-23","end":"2027-01-30","title":"Foreldraferð á skíði","type":"ferd","note":"23.–30. janúar; þarf að skipuleggja barnapössun og akstur á æfingar"}];
+const calendar = [{"start":"2026-11-17","end":"2026-11-22","title":"Panama – Almar","type":"dagatal","note":"Úr afriti dagskrár"},{"start":"2026-11-17","end":"2026-11-17","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-11-24","end":"2026-11-24","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-01","end":"2026-12-01","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-08","end":"2026-12-08","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-15","end":"2026-12-15","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-22","end":"2026-12-22","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-29","end":"2026-12-29","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-05","end":"2027-01-05","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-12","end":"2027-01-12","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-19","end":"2027-01-19","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-26","end":"2027-01-26","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"}];
 const defaultMeals = [{"day":"Mán","name":"Hakk og spaghetti","minutes":20,"url":"https://kronan.is/uppskriftir/hakk_spaghetti"},{"day":"Þri","name":"Kjúklingur í tikka masala","minutes":20,"url":"https://kronan.is/uppskriftir/kjuklingur_tikkamasala"},{"day":"Mið","name":"Plokkfiskur","minutes":50,"url":"https://kronan.is/uppskriftir/plokkfiskur"},{"day":"Fim","name":"Kjúklinga Alfredo pasta","minutes":30,"url":"https://kronan.is/uppskriftir/alfredo"},{"day":"Fös","name":"Heimagerð pítsa","minutes":null,"url":""},{"day":"Lau","name":"Frjáls dagur / afgangar","minutes":null,"url":""},{"day":"Sun","name":"Rjóma-pestó kjúklingur","minutes":30,"url":"https://kronan.is/uppskriftir/rjomapesto_kjuklingur"}];
 let allEvents=[...school,...trips,...calendar].sort((a,b)=>a.start.localeCompare(b.start));
 const formatDate = (s,opts={})=>new Intl.DateTimeFormat('is-IS',{timeZone:'UTC',...opts}).format(new Date(s+'T12:00:00Z'));
@@ -66,7 +67,14 @@ function overlaps(e,d){return e.start<=d&&e.end>=d}
 function prettyTime(e){return e.time||''}
 function renderEvent(e,now=false){const when=now?(e.time||'Allur dagurinn'):formatDate(e.start,{day:'numeric',month:'short'});return `<div class="agenda-item"><div class="agenda-when">${xss(when)}</div><div class="agenda-body"><div class="agenda-title">${xss(e.title)}<span class="badge ${xss(e.type)}">${xss(typeLabel[e.type]||'Viðburður')}</span></div><div class="agenda-note">${xss(e.note||'')}</div></div></div>`}
 function renderToday(){document.getElementById('todayLabel').textContent=formatDate(today,{weekday:'long',day:'numeric',month:'long'});const todayE=allEvents.filter(e=>overlaps(e,today));document.getElementById('todayEvents').innerHTML=todayE.length?todayE.map(e=>renderEvent(e,true)).join(''):'<p class="empty">Enginn viðburður skráður í dag.</p>';const twoWeeks=allEvents.filter(e=>e.start>today&&e.start<=iso(plusDays(dateOf(today),14)));document.getElementById('importantEvents').innerHTML=twoWeeks.slice(0,6).map(e=>renderEvent(e)).join('')||'<p class="empty">Engir viðburðir skráðir fram undan.</p>';
- document.getElementById('smartNotice').hidden = true;
+ const notice = document.getElementById('smartNotice');
+ const reminder = today >= '2026-12-21' && today <= '2027-01-04'
+   ? 'Skipulagsdagur í Marbakka 4. janúar, daginn eftir heimkomu frá Kanarí. Skipuleggið pössun.'
+   : today >= '2027-01-16' && today <= '2027-01-30'
+     ? 'Skipuleggið barnapössun og akstur á æfingar vegna skíðaferðar 23.–30. janúar.'
+     : '';
+ notice.hidden = !reminder;
+ document.getElementById('smartNoticeText').textContent = reminder;
  const d=dateOf(today);const idx=(d.getUTCDay()+6)%7;const item=meals[idx]||{name:'Ekki ákveðið'};document.getElementById('dinnerToday').innerHTML=`<div class="meal-focus"><div class="label">Kvöldmatur dagsins · tillaga</div><h3>${xss(item.name)}</h3><div class="small">${item.minutes?xss(item.minutes)+' mínútur · ':''}${recipeUrl(item.url)?`<a href="${xss(recipeUrl(item.url))}" target="_blank" rel="noopener noreferrer">Opna uppskrift ↗</a>`:'Engin uppskrift tengd'}</div></div>`;
  document.getElementById('nextDinners').innerHTML=[1,2,3].map(n=>{const di=(idx+n)%7;return `<div class="minimeal"><span class="when">${shortDays[di]}</span><b>${xss((meals[di]||{}).name||'Óákveðið')}</b></div>`}).join('');
 }
@@ -106,15 +114,21 @@ async function refreshShared() {
 async function refreshCalendar() {
   try {
     const response = await fetch('/api/calendar', { cache: 'no-store' });
-    if (response.status === 403 && calendarStatus.dataset.connected !== 'true') return;
+    if (response.status === 403) {
+      calendarStatus.textContent = 'Dagatalsaðgangur óheimill. Sýni vistaða dagskrá.';
+      return;
+    }
     if (!response.ok) throw new Error();
     const data = await response.json();
-    allEvents = [...school, ...trips, ...(data.connected ? data.events : calendar)]
-      .sort((a, b) => a.start.localeCompare(b.start));
+    const localEvents = [...school, ...trips];
+    const remoteEvents = data.connected ? data.events : calendar;
+    allEvents = [...localEvents, ...remoteEvents.filter(event => !localEvents.some(local =>
+      local.start === event.start && local.end === event.end && local.title.toLowerCase() === event.title.toLowerCase()
+    ))].sort((a, b) => a.start.localeCompare(b.start));
     calendarStatus.dataset.connected = String(data.connected);
     calendarStatus.textContent = data.connected ? 'Google Calendar uppfært ' +
       new Intl.DateTimeFormat('is-IS', { timeStyle: 'short', timeZone: 'Atlantic/Reykjavik' }).format(new Date())
-      : 'Google Calendar hefur ekki verið tengt.';
+      : 'Sýni vistað afrit af dagskránni.';
     renderToday();
     renderWeek();
   } catch {
