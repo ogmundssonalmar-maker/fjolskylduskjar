@@ -20,10 +20,25 @@
 .month-grid{border:1px solid var(--border);border-radius:12px;overflow:hidden;gap:1px;background:var(--border)}
 .month-day{display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:0;min-height:111px;text-align:left;border:0;color:var(--ink);background:var(--card);padding:7px}
 .month-day.outside{background:#f7f7f1;color:var(--muted)}
-.month-day[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--forest);background:#f0f5ee}
-.month-day:focus-visible{outline-offset:-3px}
+.month-day.selected{box-shadow:inset 0 0 0 2px var(--forest);background:#f0f5ee}
+.month-day-select{width:100%;text-align:left;background:transparent;color:inherit;border:0;padding:0;border-radius:5px}
+.month-day-select:focus-visible{outline-offset:-1px}
+a.month-event,.agenda-title a{color:inherit;text-decoration:none}
+a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
+.dayev.owner-almar,.badge.owner-almar,.calendar-legend .owner-almar{background:#e5eff9;color:#204d79;border-color:#407db8}
+.dayev.owner-oddny,.badge.owner-oddny,.calendar-legend .owner-oddny{background:#f2e9fa;color:#633681;border-color:#9763b8}
+.dayev.owner-family,.badge.owner-family,.calendar-legend .owner-family{background:#e8f2e9;color:#215839;border-color:#4d8863}
+.dayev.owner-children,.badge.owner-children,.calendar-legend .owner-children{background:#fff1da;color:#75420c;border-color:#c48232}
+.calendar-legend{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:15px}
+.calendar-legend .badge{margin-left:0}
+#eventDialog{border:1px solid var(--border);border-radius:15px;padding:22px;width:min(430px,calc(100% - 32px));color:var(--ink)}
+#eventDialog::backdrop{background:#14261b80}
+#eventDialog h2{margin:0 0 14px}
+#eventForm label{display:block;font-weight:650;margin:9px 0}
+#eventForm input,#eventForm select{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
+.event-time-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .month-day-number{align-self:start;display:grid;place-items:center;min-width:25px;height:25px;font-size:13px;font-weight:800}
-.month-day[aria-current="date"] .month-day-number{background:var(--forest);color:white;border-radius:50%}
+.month-day-select[aria-current="date"] .month-day-number{background:var(--forest);color:white;border-radius:50%}
 .month-event{display:block;margin:0;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
 .month-more{font-size:10px;color:var(--muted)}
 .month-details{padding-top:14px}
@@ -35,7 +50,7 @@
 @media(max-width:650px){
  .month-card{padding:12px}
  .month-day{min-height:69px;padding:3px;gap:3px}
- .month-event{height:4px;padding:0;font-size:0}
+ .month-event{height:8px;padding:0;font-size:0}
  .month-day-number{font-size:12px;min-width:22px;height:22px}
  .month-more{font-size:9px}
 }
@@ -61,11 +76,14 @@
     <div class="month-toolbar">
       <h2 id="monthHeading" aria-live="polite"></h2>
       <div class="month-controls">
+        <button class="solid" type="button" id="openEventDialog">Bæta við viðburði</button>
         <button class="outline" type="button" onclick="moveMonth(-1)" aria-label="Fyrri mánuður">←</button>
         <button class="outline" type="button" onclick="resetMonth()">Í dag</button>
         <button class="outline" type="button" onclick="moveMonth(1)" aria-label="Næsti mánuður">→</button>
       </div>
     </div>
+    <p class="help" id="eventWriteStatus" role="status" hidden></p>
+    <div class="calendar-legend" aria-label="Litir dagskrár"><span class="badge owner-almar">Almar</span><span class="badge owner-oddny">Oddný</span><span class="badge owner-family">Fjölskyldan</span><span class="badge owner-children">Börnin</span></div>
     <div class="month-days" aria-hidden="true"><span>Mán</span><span>Þri</span><span>Mið</span><span>Fim</span><span>Fös</span><span>Lau</span><span>Sun</span></div>
     <div id="monthGrid" class="month-grid" aria-label="Mánaðardagatal"></div>
     <section class="month-details" aria-labelledby="selectedDayHeading">
@@ -87,6 +105,27 @@
     <div class="month-controls">
       <button class="outline" type="button" id="closeSyncDialog">Hætta við</button>
       <button type="submit" class="solid" id="syncSubmit">Virkja</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="eventDialog" aria-labelledby="eventDialogHeading">
+  <form id="eventForm">
+    <h2 id="eventDialogHeading">Bæta við viðburði</h2>
+    <label>Heiti <input name="title" required maxlength="160"></label>
+    <label>Dagsetning <input name="date" type="date" required></label>
+    <div class="event-time-fields">
+      <label>Frá <input name="startTime" type="time"></label>
+      <label>Til <input name="endTime" type="time"></label>
+    </div>
+    <p class="help">Skildu tímana eftir auða fyrir heilsdagsviðburð.</p>
+    <label>Fyrir <select name="owner">
+      <option value="family">Fjölskylduna</option><option value="almar">Almar</option>
+      <option value="oddny">Oddnýju</option><option value="children">Börnin</option>
+    </select></label>
+    <p id="eventDialogStatus" class="help" role="status"></p>
+    <div class="month-controls">
+      <button class="outline" type="button" id="closeEventDialog">Hætta við</button>
+      <button class="solid" type="submit" id="eventSubmit">Vista í Google Calendar</button>
     </div>
   </form>
 </dialog>
@@ -154,7 +193,44 @@ function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classL
 document.querySelectorAll('#tabs button').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
 function overlaps(e,d){return e.start<=d&&e.end>=d}
 function prettyTime(e){return e.time||''}
-function renderEvent(e,now=false){const when=now?(e.time||'Allur dagurinn'):formatDate(e.start,{day:'numeric',month:'short'});return `<div class="agenda-item"><div class="agenda-when">${xss(when)}</div><div class="agenda-body"><div class="agenda-title">${xss(e.title)}<span class="badge ${xss(e.type)}">${xss(typeLabel[e.type]||'Viðburður')}</span></div><div class="agenda-note">${xss(e.note||'')}</div></div></div>`}
+const ownerLabels = { almar:'Almar', oddny:'Oddný', family:'Fjölskyldan', children:'Börnin' };
+function ownerFor(event) {
+  if (event.type !== 'dagatal') return '';
+  if (Object.hasOwn(ownerLabels, event.owner)) return event.owner;
+  const names = event.title.toLocaleLowerCase('is').split(/[^\p{L}]+/u);
+  if (names.includes('almar') !== names.includes('oddný')) return names.includes('almar') ? 'almar' : 'oddny';
+  return 'family';
+}
+function eventLink(event) {
+  if (!event.htmlLink || !URL.canParse(event.htmlLink)) return '';
+  const url = new URL(event.htmlLink);
+  return url.origin === 'https://calendar.google.com' ||
+    (url.origin === 'https://www.google.com' && url.pathname.startsWith('/calendar/')) ? url.href : '';
+}
+function renderEvent(event, showTime = false) {
+  const when = showTime ? event.time || 'Allur dagurinn' : formatDate(event.start, { day:'numeric', month:'short' });
+  const owner = ownerFor(event);
+  const link = eventLink(event);
+  const title = link
+    ? `<a href="${xss(link)}" target="_blank" rel="noopener noreferrer" title="Opna í Google Calendar">${xss(event.title)} ↗</a>`
+    : xss(event.title);
+  return `<div class="agenda-item"><div class="agenda-when">${xss(when)}</div><div class="agenda-body">
+    <div class="agenda-title">${title}<span class="badge ${xss(event.type)} ${owner ? 'owner-' + owner : ''}">
+      ${xss(ownerLabels[owner] || typeLabel[event.type] || 'Viðburður')}</span></div>
+    <div class="agenda-note">${xss(event.note || '')}</div></div></div>`;
+}
+function renderMonthEvent(event) {
+  const owner = ownerFor(event);
+  const link = eventLink(event);
+  const classes = 'month-event dayev ' + xss(event.type) + (owner ? ' owner-' + owner : '');
+  const label = xss(event.title + (owner ? ', ' + ownerLabels[owner] : ''));
+  const content = (event.time ? xss(event.time) + ' ' : '') + xss(event.title);
+  return link
+    ? `<a class="${classes}" href="${xss(link)}" target="_blank" rel="noopener noreferrer"
+        title="${label}" aria-label="${label} · Opna í Google Calendar">${content}</a>`
+    : `<span class="${classes}" title="${label}">${content}</span>`;
+}
+
 function renderToday(){document.getElementById('todayLabel').textContent=formatDate(today,{weekday:'long',day:'numeric',month:'long'});const todayE=allEvents.filter(e=>overlaps(e,today));document.getElementById('todayEvents').innerHTML=todayE.length?todayE.map(e=>renderEvent(e,true)).join(''):'<p class="empty">Enginn viðburður skráður í dag.</p>';const twoWeeks=allEvents.filter(e=>e.start>today&&e.start<=iso(plusDays(dateOf(today),14)));document.getElementById('importantEvents').innerHTML=twoWeeks.slice(0,6).map(e=>renderEvent(e)).join('')||'<p class="empty">Engir viðburðir skráðir fram undan.</p>';
  const notice = document.getElementById('smartNotice');
  const reminders = school.filter(event => ['lokun', 'skraning'].includes(event.type) &&
@@ -179,6 +255,7 @@ let version = null;
 let saving = false;
 const syncStatus = document.getElementById('syncStatus');
 const calendarStatus = document.getElementById('calendarStatus');
+let calendarCanWrite = false;
 const syncUnlock = document.getElementById('syncUnlock');
 const syncDialog = document.getElementById('syncDialog');
 const syncForm = document.getElementById('syncForm');
@@ -212,6 +289,64 @@ syncForm.addEventListener('submit', async event => {
     syncDialogStatus.textContent = 'Ekki náðist í heimilisskjáinn. Reyndu aftur.';
   } finally {
     syncSubmit.disabled = false;
+  }
+});
+
+const eventDialog = document.getElementById('eventDialog');
+const eventForm = document.getElementById('eventForm');
+const eventWriteStatus = document.getElementById('eventWriteStatus');
+const eventDialogStatus = document.getElementById('eventDialogStatus');
+const eventSubmit = document.getElementById('eventSubmit');
+let eventDraftId;
+function setEventWriteStatus(text) {
+  eventWriteStatus.textContent = text;
+  eventWriteStatus.hidden = !text;
+}
+document.getElementById('openEventDialog').addEventListener('click', () => {
+  if (!calendarCanWrite) {
+    setEventWriteStatus('Skrifaðgangur að Google Calendar hefur ekki verið virkjaður.');
+    return;
+  }
+  if (version === null) {
+    setEventWriteStatus('Virkjaðu samstillingu með breytingakóðanum til að bæta við viðburði.');
+    syncUnlock.click();
+    return;
+  }
+  setEventWriteStatus('');
+  eventForm.reset();
+  eventForm.elements.date.value = selectedDay;
+  eventDraftId = crypto.randomUUID().replaceAll('-', '');
+  eventDialogStatus.textContent = '';
+  eventDialog.showModal();
+});
+document.getElementById('closeEventDialog').addEventListener('click', () => eventDialog.close());
+eventForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const draft = { ...Object.fromEntries(new FormData(eventForm)), id: eventDraftId };
+  eventDialogStatus.textContent = '';
+  eventSubmit.disabled = true;
+  try {
+    const response = await fetch('/api/calendar/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      eventDialogStatus.textContent = result.error || 'Ekki tókst að vista viðburðinn.';
+      return;
+    }
+    eventDialog.close();
+    shownMonth = draft.date.slice(0, 7);
+    selectedDay = draft.date;
+    monthCalendar.delete(shownMonth);
+    setEventWriteStatus('Viðburður vistaður í Google Calendar.');
+    renderMonth();
+    await Promise.all([refreshCalendar(), refreshMonth()]);
+  } catch {
+    eventDialogStatus.textContent = 'Ekki tókst að vista viðburðinn. Reyndu aftur.';
+  } finally {
+    eventSubmit.disabled = false;
   }
 });
 
@@ -260,6 +395,7 @@ async function refreshCalendar() {
     }
     if (!response.ok) throw new Error();
     const data = await response.json();
+    calendarCanWrite = data.canCreateEvents === true;
     const localEvents = [...school, ...trips];
     const remoteEvents = data.connected ? data.events : calendar;
     allEvents = [...localEvents, ...remoteEvents.filter(event => !localEvents.some(local =>
@@ -403,14 +539,15 @@ function renderMonth() {
     const events = eventsOnMonthDay(day);
     const label = formatDate(day, { weekday: 'long', day: 'numeric', month: 'long' }) +
       (events.length ? ', ' + events.length + ' viðburðir' : '');
-    return `<button type="button" class="month-day ${day.startsWith(shownMonth) ? '' : 'outside'}"
-      aria-label="${xss(label)}" aria-pressed="${day === selectedDay}" ${day === today ? 'aria-current="date"' : ''}
-      data-date="${day}" onclick="selectMonthDay('${day}')">
-      <span class="month-day-number">${Number(day.slice(-2))}</span>
-      ${events.slice(0, 3).map(event => `<span class="month-event dayev ${xss(event.type)}"
-        title="${xss(event.title)}">${event.time ? xss(event.time) + ' ' : ''}${xss(event.title)}</span>`).join('')}
+    return `<div class="month-day ${day.startsWith(shownMonth) ? '' : 'outside'} ${day === selectedDay ? 'selected' : ''}">
+      <button type="button" class="month-day-select" aria-label="${xss(label)}"
+        aria-pressed="${day === selectedDay}" ${day === today ? 'aria-current="date"' : ''}
+        data-date="${day}" onclick="selectMonthDay('${day}')">
+        <span class="month-day-number">${Number(day.slice(-2))}</span>
+      </button>
+      ${events.slice(0, 3).map(renderMonthEvent).join('')}
       ${events.length > 3 ? `<span class="month-more">+${events.length - 3}</span>` : ''}
-    </button>`;
+    </div>`;
   }).join('');
   if (focusedDate) grid.querySelector('[data-date="' + focusedDate + '"]')?.focus({ preventScroll: true });
   document.getElementById('selectedDayHeading').textContent = formatDate(selectedDay, {
@@ -431,6 +568,7 @@ async function refreshMonth() {
     if (!response.ok) return;
     const data = await response.json();
     if (!data.connected) return;
+    calendarCanWrite = data.canCreateEvents === true;
     monthCalendar.set(month, { updated: Date.now(), events: data.events });
     if (month === shownMonth) renderMonth();
   } catch {

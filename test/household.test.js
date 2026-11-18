@@ -113,3 +113,63 @@ test('calendar can fetch the full selected month including days before today', a
   assert.equal(invalid.status, 400);
   assert.equal(google.mock.callCount(), 2);
 });
+
+test('calendar links and household-authorized writes use only the configured family calendar', async t => {
+  const base = 'https://example.com';
+  const googleLink = 'https://calendar.google.com/calendar/event?eid=example';
+  const env = {
+    HOUSEHOLD_EDIT_CODE: 'local-test-edit-code',
+    GOOGLE_CALENDAR_IDS: 'family-calendar',
+    GOOGLE_CLIENT_ID: 'client',
+    GOOGLE_CLIENT_SECRET: 'secret',
+    GOOGLE_REFRESH_TOKEN: 'refresh',
+  };
+  const post = (path, body, cookie = '') => new Request(base + path, {
+    method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify(body),
+  });
+  const session = await worker.fetch(post('/api/household/session', { code: env.HOUSEHOLD_EDIT_CODE }), env);
+  assert.equal(session.status, 200);
+  const cookie = session.headers.get('Set-Cookie').split(';')[0];
+  const draft = { id: '12345678123412341234123456789abc', title: 'Fjölskyldufundur',
+    date: '2026-12-31', owner: 'oddny', startTime: '', endTime: '' };
+  assert.equal((await worker.fetch(post('/api/calendar/events', draft, cookie), env)).status, 403);
+  env.GOOGLE_CALENDAR_WRITES_ENABLED = 'true';
+  assert.equal((await worker.fetch(post('/api/calendar/events', draft), env)).status, 403);
+  assert.equal((await worker.fetch(post('/api/calendar/events', { ...draft, date: '2026-02-30' }, cookie), env)).status, 400);
+
+  let created;
+  let writes = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).includes('oauth2.googleapis.com')) return Response.json({ access_token: 'token' });
+    assert.equal(options.headers.Authorization, 'Bearer token');
+    const pathname = new URL(url).pathname;
+    if (options.method === 'POST') {
+      assert.match(pathname, /\/family-calendar\/events$/);
+      const event = JSON.parse(options.body);
+      assert.equal(event.colorId, '3');
+      assert.equal(event.extendedProperties.private.dashboardOwner, 'oddny');
+      assert.deepEqual(event.start, { date: '2026-12-31' });
+      assert.deepEqual(event.end, { date: '2027-01-01' });
+      if (writes++ > 0) return new Response(null, { status: 409 });
+      created = { ...event, htmlLink: googleLink };
+      return Response.json(created);
+    }
+    if (pathname.endsWith(draft.id)) return Response.json(created);
+    return Response.json({ items: [
+      created,
+      { ...created, id: 'other', summary: 'Fundur - Almar', htmlLink: 'https://example.net/calendar/event',
+        extendedProperties: undefined },
+    ] });
+  });
+
+  for (let i = 0; i < 2; i++) {
+    const response = await worker.fetch(post('/api/calendar/events', draft, cookie), env);
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).htmlLink, googleLink);
+  }
+  const calendar = await (await worker.fetch(new Request(base + '/api/calendar'), env)).json();
+  assert.equal(calendar.canCreateEvents, true);
+  assert.deepEqual(calendar.events.map(({ owner, htmlLink }) => [owner, htmlLink]),
+    [['oddny', googleLink], ['almar', '']]);
+});

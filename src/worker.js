@@ -10,7 +10,8 @@ export async function serveWorker(request, env, assets = env.ASSETS) {
   if (pathname === '/api/household/session' && request.method === 'POST') {
     return openHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE);
   }
-  if (pathname === '/api/household' && await hasHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE)) {
+  if ((pathname === '/api/household' || pathname === '/api/calendar/events') &&
+      await hasHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE)) {
     return household(request, env);
   }
   if (pathname === '/api' || pathname.startsWith('/api/')) {

@@ -49,3 +49,9 @@ Fyrir staðbundna Pages-keyrslu notið `wrangler pages dev --config wrangler.pag
 ## Breytingakóði á Worker
 
 Setjið sterkan, einstakan kóða sem `HOUSEHOLD_EDIT_CODE` í **Runtime variables and secrets → Production**. Veljið **Secret**. Á hverju tæki er kóðinn sleginn inn undir **Virkja samstillingu**. Tækið fær undirritaða vafraköku sem gildir í 90 daga. Þegar kóðanum er breytt þarf að virkja tækin aftur. D1 geymir verkefni og matseðla og skráning á tæki veitir aðgang að báðu. Opna yfirlitið og Google-dagatalið krefjast ekki kóðans.
+
+## Viðburðir skráðir í Google Calendar
+
+Skrifaðgangur er óvirkur við venjulega uppsetningu. Eftir samþykki eiganda þarf Google refresh token með heimildinni `https://www.googleapis.com/auth/calendar.events` og aðgang til að breyta Fjölskyldudagatalinu. Vista skal refresh token sem `GOOGLE_REFRESH_TOKEN` og `GOOGLE_CALENDAR_WRITES_ENABLED=true` sem textabreytu í Production. Ef fleiri en eitt dagatal er lesið þarf einnig að velja skrifdagatalið með `GOOGLE_CALENDAR_WRITE_ID`, sem verður að vera í `GOOGLE_CALENDAR_IDS`.
+
+Áður en nýr viðburður er vistaður þarf að virkja samstillingu með breytingakóðanum. Viðburðurinn fer á sameiginlega dagatalið. Litaflokkurinn er vistaður með viðburðinum svo hann skili sér í mánaðarsýninni og í Google Calendar.

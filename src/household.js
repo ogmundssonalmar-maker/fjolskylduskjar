@@ -1,4 +1,4 @@
-import { CalendarError, readCalendar } from './calendar.js';
+import { CalendarError, addCalendarEvent, readCalendar } from './calendar.js';
 
 const response = (body, status = 200) => Response.json(body, {
   status,
@@ -45,6 +45,30 @@ export async function household(request, env) {
     } catch (error) {
       const code = error instanceof CalendarError ? error.code : 'google_calendar_failed';
       return response({ error: 'Ekki náðist í Google Calendar.', code }, 502);
+    }
+  }
+  if (pathname === '/api/calendar/events' && request.method === 'POST') {
+    if (request.headers.get('Origin') !== new URL(request.url).origin ||
+        request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') {
+      return response({ error: 'Beiðni óheimil.' }, 403);
+    }
+    const input = await request.json().catch(() => null);
+    try {
+      return response(await addCalendarEvent(env, input), 201);
+    } catch (error) {
+      if (error.code === 'calendar_write_disabled') {
+        return response({ error: 'Skrifaðgangur að Google Calendar er óvirkur.' }, 403);
+      }
+      if (error.code === 'invalid_calendar_event') {
+        return response({ error: 'Athugaðu dagsetningu og tímasetningu viðburðarins.' }, 400);
+      }
+      if (error.code === 'google_calendar_http_409') {
+        return response({ error: 'Viðburður var þegar vistaður. Lokaðu glugganum og endurhladdu dagskránni.' }, 409);
+      }
+      if (error.code === 'google_calendar_http_403') {
+        return response({ error: 'Google heimilar ekki vistun á þessu dagatali.' }, 502);
+      }
+      return response({ error: 'Ekki tókst að vista í Google Calendar. Reyndu aftur.' }, 502);
     }
   }
   if (pathname !== '/api/household') return response({ error: 'Slóð fannst ekki.' }, 404);
