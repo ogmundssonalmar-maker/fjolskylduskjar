@@ -19,10 +19,14 @@ function validState(state) {
 }
 
 export async function household(request, env) {
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   if (pathname === '/api/calendar' && request.method === 'GET') {
+    const month = searchParams.get('month');
+    if (month !== null && !/^[2-9]\d{3}-(0[1-9]|1[0-2])$/.test(month)) {
+      return response({ error: 'Ógildur mánuður.' }, 400);
+    }
     try {
-      return response(await readCalendar(env));
+      return response(await readCalendar(env, new Date(), month));
     } catch (error) {
       const code = error instanceof CalendarError ? error.code : 'google_calendar_failed';
       return response({ error: 'Ekki náðist í Google Calendar.', code }, 502);

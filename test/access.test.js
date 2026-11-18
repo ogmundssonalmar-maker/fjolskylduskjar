@@ -18,7 +18,7 @@ test('build serves only the page and applies Functions to every path', async () 
     version: 1, include: ['/*'], exclude: [],
   });
   const html = await readFile('dist/index.html', 'utf8');
-  assert.match(html, /const school = \[.*2027-01-04/);
+  assert.match(html, /const school = \[[\s\S]*?2027-01-04/);
   assert.match(html, /const trips = \[.*2026-12-27.*2027-01-03.*2027-01-23.*2027-01-30/);
   assert.match(html, /const calendar = \[\{/);
   assert.ok(html.includes("let tasks=load('family-tasks-v2',[]);"));

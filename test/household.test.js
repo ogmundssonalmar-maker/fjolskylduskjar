@@ -93,3 +93,24 @@ test('public calendar diagnoses OAuth rejection without exposing Google response
     error: 'Ekki náðist í Google Calendar.', code: 'google_refresh_token_rejected',
   });
 });
+
+test('calendar can fetch the full selected month including days before today', async t => {
+  const env = {
+    GOOGLE_CALENDAR_IDS: 'first',
+    GOOGLE_CLIENT_ID: 'client',
+    GOOGLE_CLIENT_SECRET: 'secret',
+    GOOGLE_REFRESH_TOKEN: 'refresh',
+  };
+  const google = t.mock.method(globalThis, 'fetch', async url => {
+    if (String(url).includes('oauth2.googleapis.com')) return Response.json({ access_token: 'token' });
+    assert.equal(url.searchParams.get('timeMin'), '2026-12-01T00:00:00.000Z');
+    assert.equal(url.searchParams.get('timeMax'), '2027-01-01T00:00:00.000Z');
+    return Response.json({ items: [] });
+  });
+  const valid = await worker.fetch(new Request('https://example.com/api/calendar?month=2026-12'), env);
+  assert.equal(valid.status, 200);
+  assert.equal((await valid.json()).connected, true);
+  const invalid = await worker.fetch(new Request('https://example.com/api/calendar?month=2026-13'), env);
+  assert.equal(invalid.status, 400);
+  assert.equal(google.mock.callCount(), 2);
+});

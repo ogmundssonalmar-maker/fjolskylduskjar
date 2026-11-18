@@ -7,7 +7,7 @@ export class CalendarError extends Error {
   }
 }
 
-export async function readCalendar(env, now = new Date()) {
+export async function readCalendar(env, now = new Date(), month = null) {
   const ids = [...new Set((env.GOOGLE_CALENDAR_IDS || '').split(',').map(id => id.trim()).filter(Boolean))];
   if (!ids.length) return { connected: false, events: [] };
 
@@ -35,8 +35,11 @@ export async function readCalendar(env, now = new Date()) {
   if (!token) throw new CalendarError('google_oauth_failed');
 
   const today = now.toISOString().slice(0, 10);
-  const timeMin = today + 'T00:00:00Z';
-  const timeMax = new Date(Date.parse(timeMin) + 45 * 86400000).toISOString();
+  const firstDay = month ? new Date(month + '-01T00:00:00Z') : new Date(today + 'T00:00:00Z');
+  const nextMonth = new Date(firstDay);
+  nextMonth.setUTCMonth(firstDay.getUTCMonth() + 1);
+  const timeMin = firstDay.toISOString();
+  const timeMax = month ? nextMonth.toISOString() : new Date(firstDay.getTime() + 45 * 86400000).toISOString();
   const headers = { Authorization: 'Bearer ' + token };
   const events = new Map();
 
