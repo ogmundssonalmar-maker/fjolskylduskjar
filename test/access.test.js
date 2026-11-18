@@ -39,8 +39,12 @@ test('Access requires a signed, current token for the app and an allowed parent'
       .setIssuer(tokenIssuer).setAudience(audience).setIssuedAt()
       .setExpirationTime(expiration).sign(key);
 
-  async function request(path, token, settings = env) {
-    const headers = token ? { 'Cf-Access-Jwt-Assertion': token } : {};
+  async function request(path, token, settings = env, useCookie = false) {
+    const headers = {};
+    if (token) {
+      if (useCookie) headers.Cookie = 'other=1; CF_Authorization=' + token;
+      else headers['Cf-Access-Jwt-Assertion'] = token;
+    }
     headers['Cf-Access-Authenticated-User-Email'] = 'first@example.com';
     const response = await onRequest({
       request: new Request('https://example.com' + path, { headers }),
@@ -67,6 +71,8 @@ test('Access requires a signed, current token for the app and an allowed parent'
     assert.equal(await request('/', await sign(claims)), 403);
   }
   assert.equal(await request('/', await sign()), 200);
+  assert.equal(await request('/api/test', await sign(), env, true), 200);
+  assert.equal(await request('/api/test', 'invalid', env, true), 403);
   assert.equal(await request('/index.html', await sign({
     email: 'second@example.com', audience: 'preview-audience',
   })), 200);

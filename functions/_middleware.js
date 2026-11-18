@@ -15,14 +15,20 @@ function privateHeaders() {
 export async function onRequest({ request, env, next }) {
   const headers = privateHeaders();
   const denied = () => new Response('Aðgangur óheimill.', { status: 403, headers });
-  const token = request.headers.get('Cf-Access-Jwt-Assertion');
+  const cookieToken = request.headers.get('Cookie')?.match(/(?:^|;\s*)CF_Authorization=([^;]+)/)?.[1];
+  const token = request.headers.get('Cf-Access-Jwt-Assertion') || cookieToken;
+  const reject = reason => {
+    console.warn('Cloudflare Access:', reason);
+    return denied();
+  };
   const team = env.ACCESS_TEAM_DOMAIN;
   const audiences = (env.ACCESS_AUDIENCES ?? '').split(',').map(value => value.trim()).filter(Boolean);
   const parents = (env.ACCESS_PARENT_EMAILS ?? '').toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
 
-  if (!token || !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team ?? '') || !audiences.length || !parents.length) {
-    return denied();
+  if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team ?? '') || !audiences.length || !parents.length) {
+    return reject('configuration missing or invalid');
   }
+  if (!token) return reject('token missing');
 
   const issuer = 'https://' + team;
   if (!keySets.has(issuer)) {
@@ -37,10 +43,11 @@ export async function onRequest({ request, env, next }) {
       requiredClaims: ['exp', 'iat', 'email'],
     });
     if (typeof payload.email !== 'string' || !parents.includes(payload.email.toLowerCase())) {
-      return denied();
+      return reject('email not allowed');
     }
-  } catch {
-    return denied();
+  } catch (error) {
+    const reason = error?.code === 'ERR_JWT_CLAIM_VALIDATION_FAILED' ? error.claim : error?.code;
+    return reject(reason || 'verification failed');
   }
 
   const response = await next();

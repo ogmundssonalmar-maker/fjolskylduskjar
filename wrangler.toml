@@ -1,6 +1,7 @@
 name = "fjolskylduskjar"
 main = "src/worker.js"
 compatibility_date = "2026-11-18"
+keep_vars = true
 
 [assets]
 directory = "./dist"
