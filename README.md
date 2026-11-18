@@ -10,7 +10,7 @@ Skjárinn sýnir vistaða dagskrá úr v2 á meðan Google Calendar er ótengt. 
 
 ## Cloudflare Pages
 
-Fyrir staðbundna Pages-keyrslu notið `wrangler pages dev --config wrangler.pages.toml`. Sjálfgefna `wrangler.toml` er fyrir Workers.
+Fyrir ZIP-birtingu og Pages-keyrslu sjá [PAGES_UPLOAD.md](PAGES_UPLOAD.md). Sjálfgefna `wrangler.toml` er fyrir Workers.
 
 1. GitHub-geymslan má vera opin á meðan unnið er með kóðann. Eldri v2 gögn eru í núverandi Git-sögu. Geymið ný fjölskyldugögn í vernduðum gagnagrunni og leyndarmál í Cloudflare-stillingum.
 2. Tengið geymsluna við Cloudflare Pages með `main` sem production-grein, `npm run build` sem byggingarskipun og `dist` sem úttaksmöppu. Veljið Node.js 22 eða nýrra. Haldið sjálfvirkum preview-útgáfum óvirkum þar til Access-reglur fyrir þær eru tilbúnar.
