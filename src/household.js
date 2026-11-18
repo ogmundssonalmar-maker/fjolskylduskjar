@@ -1,4 +1,4 @@
-import { readCalendar } from './calendar.js';
+import { CalendarError, readCalendar } from './calendar.js';
 
 const response = (body, status = 200) => Response.json(body, {
   status,
@@ -23,8 +23,9 @@ export async function household(request, env) {
   if (pathname === '/api/calendar' && request.method === 'GET') {
     try {
       return response(await readCalendar(env));
-    } catch {
-      return response({ error: 'Ekki náðist í Google Calendar.' }, 502);
+    } catch (error) {
+      const code = error instanceof CalendarError ? error.code : 'google_calendar_failed';
+      return response({ error: 'Ekki náðist í Google Calendar.', code }, 502);
     }
   }
   if (pathname !== '/api/household') return response({ error: 'Slóð fannst ekki.' }, 404);

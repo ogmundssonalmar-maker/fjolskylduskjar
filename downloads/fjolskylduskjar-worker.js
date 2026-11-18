@@ -777,21 +777,35 @@ async function onRequest({ request, env, next }) {
 
 // src/calendar.js
 var google = "https://www.googleapis.com/calendar/v3";
+var CalendarError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+};
 async function readCalendar(env, now = /* @__PURE__ */ new Date()) {
   const ids = [...new Set((env.GOOGLE_CALENDAR_IDS || "").split(",").map((id) => id.trim()).filter(Boolean))];
   if (!ids.length) return { connected: false, events: [] };
+  if (![env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, env.GOOGLE_REFRESH_TOKEN].every((value) => typeof value === "string" && value.trim())) {
+    throw new CalendarError("missing_google_credentials");
+  }
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN
+      client_id: env.GOOGLE_CLIENT_ID.trim(),
+      client_secret: env.GOOGLE_CLIENT_SECRET.trim(),
+      refresh_token: env.GOOGLE_REFRESH_TOKEN.trim()
     })
   });
-  if (!tokenResponse.ok) throw new Error("Google OAuth failed");
+  if (!tokenResponse.ok) {
+    const { error } = await tokenResponse.json().catch(() => ({}));
+    if (error === "invalid_grant") throw new CalendarError("google_refresh_token_rejected");
+    if (error === "invalid_client") throw new CalendarError("google_client_rejected");
+    throw new CalendarError("google_oauth_failed");
+  }
   const { access_token: token } = await tokenResponse.json();
-  if (!token) throw new Error("Google OAuth returned no token");
+  if (!token) throw new CalendarError("google_oauth_failed");
   const today = now.toISOString().slice(0, 10);
   const timeMin = today + "T00:00:00Z";
   const timeMax = new Date(Date.parse(timeMin) + 45 * 864e5).toISOString();
@@ -809,7 +823,7 @@ async function readCalendar(env, now = /* @__PURE__ */ new Date()) {
     });
     do {
       const response2 = await fetch(url, { headers });
-      if (!response2.ok) throw new Error("Google Calendar request failed");
+      if (!response2.ok) throw new CalendarError("google_calendar_http_" + response2.status);
       const page = await response2.json();
       for (const item of page.items || []) {
         if (item.status === "cancelled" || !item.start || !item.end) continue;
@@ -847,8 +861,9 @@ async function household(request, env) {
   if (pathname === "/api/calendar" && request.method === "GET") {
     try {
       return response(await readCalendar(env));
-    } catch {
-      return response({ error: "Ekki n\xE1\xF0ist \xED Google Calendar." }, 502);
+    } catch (error) {
+      const code = error instanceof CalendarError ? error.code : "google_calendar_failed";
+      return response({ error: "Ekki n\xE1\xF0ist \xED Google Calendar.", code }, 502);
     }
   }
   if (pathname !== "/api/household") return response({ error: "Sl\xF3\xF0 fannst ekki." }, 404);

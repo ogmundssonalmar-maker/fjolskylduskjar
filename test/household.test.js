@@ -54,7 +54,12 @@ test('calendar uses OAuth, follows pages and preserves recurring occurrences', a
       ? { items: [event('2026-11-26', '2026-11-27')] }
       : { items: [event('2026-11-19', '2026-11-20')], nextPageToken: 'next' });
   });
-  const data = await readCalendar({ GOOGLE_CALENDAR_IDS: 'first,second' }, new Date('2026-11-18'));
+  const data = await readCalendar({
+    GOOGLE_CALENDAR_IDS: 'first,second',
+    GOOGLE_CLIENT_ID: 'client',
+    GOOGLE_CLIENT_SECRET: 'secret',
+    GOOGLE_REFRESH_TOKEN: 'refresh',
+  }, new Date('2026-11-18'));
   assert.equal(data.connected, true);
   assert.deepEqual(data.events.map(({ start, end }) => [start, end]),
     [['2026-11-19', '2026-11-19'], ['2026-11-26', '2026-11-26']]);
@@ -69,4 +74,22 @@ test('Worker serves calendar reads without signing in while protecting shared st
   for (const [path, method] of [['/api/calendar', 'POST'], ['/api/household', 'GET'], ['/api/household', 'PUT']]) {
     assert.equal((await worker.fetch(new Request(base + path, { method }), {})).status, 403);
   }
+});
+
+
+test('public calendar diagnoses OAuth rejection without exposing Google response details', async t => {
+  const request = new Request('https://example.com/api/calendar');
+  const env = { GOOGLE_CALENDAR_IDS: 'test-id' };
+  assert.equal((await (await worker.fetch(request, env)).json()).code, 'missing_google_credentials');
+
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    error: 'invalid_grant', error_description: 'Sensitive provider text',
+  }, { status: 400 }));
+  const response = await worker.fetch(request, {
+    ...env, GOOGLE_CLIENT_ID: 'client', GOOGLE_CLIENT_SECRET: 'secret', GOOGLE_REFRESH_TOKEN: 'refresh',
+  });
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), {
+    error: 'Ekki náðist í Google Calendar.', code: 'google_refresh_token_rejected',
+  });
 });
