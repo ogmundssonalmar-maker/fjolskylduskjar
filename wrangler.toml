@@ -8,7 +8,10 @@ directory = "./dist"
 binding = "ASSETS"
 run_worker_first = true
 
-# Add [[d1_databases]] with binding = "DB", database_name and database_id.
+[[d1_databases]]
+binding = "DB"
+database_name = "fjolskylduskjar-db"
+database_id = "d935b166-0b01-450c-bed0-e3fa1efb51dc"
 
 [build]
 command = "npm run build"
