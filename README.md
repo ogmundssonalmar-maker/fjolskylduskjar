@@ -52,6 +52,6 @@ Setjið sterkan, einstakan kóða sem `HOUSEHOLD_EDIT_CODE` í **Runtime variabl
 
 ## Viðburðir skráðir í Google Calendar
 
-Skrifaðgangur er óvirkur við venjulega uppsetningu. Eftir samþykki eiganda þarf Google refresh token með heimildinni `https://www.googleapis.com/auth/calendar.events` og aðgang til að breyta Fjölskyldudagatalinu. Vista skal refresh token sem `GOOGLE_REFRESH_TOKEN` og `GOOGLE_CALENDAR_WRITES_ENABLED=true` sem textabreytu í Production. Ef fleiri en eitt dagatal er lesið þarf einnig að velja skrifdagatalið með `GOOGLE_CALENDAR_WRITE_ID`, sem verður að vera í `GOOGLE_CALENDAR_IDS`.
+Eigandi hefur samþykkt skrifaðgang fyrir Fjölskyldudagatalið. Til að virkja vistun þarf Google refresh token með heimildinni `https://www.googleapis.com/auth/calendar.events` og aðgang til að breyta Fjölskyldudagatalinu. Vista skal refresh token sem `GOOGLE_REFRESH_TOKEN` í Production. Skrifheimild heimilisskjásins er stillt í `wrangler.toml`. Ef fleiri en eitt dagatal er lesið þarf einnig að velja skrifdagatalið með `GOOGLE_CALENDAR_WRITE_ID`, sem verður að vera í `GOOGLE_CALENDAR_IDS`.
 
 Áður en nýr viðburður er vistaður þarf að virkja samstillingu með breytingakóðanum. Viðburðurinn fer á sameiginlega dagatalið. Litaflokkurinn er vistaður með viðburðinum svo hann skili sér í mánaðarsýninni og í Google Calendar.
