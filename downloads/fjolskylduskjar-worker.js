@@ -882,18 +882,16 @@ async function household(request, env) {
 }
 
 // src/worker.js
-var worker_default = {
-  fetch(request, env) {
-    const { pathname } = new URL(request.url);
-    if (pathname === "/api/calendar" && request.method === "GET") {
-      return household(request, env);
-    }
-    if (pathname === "/api" || pathname.startsWith("/api/")) {
-      return onRequest({ request, env, next: () => household(request, env) });
-    }
-    return env.ASSETS.fetch(request);
+function serveWorker(request, env, assets = env.ASSETS) {
+  const { pathname } = new URL(request.url);
+  if (pathname === "/api/calendar" && request.method === "GET") {
+    return household(request, env);
   }
-};
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    return onRequest({ request, env, next: () => household(request, env) });
+  }
+  return assets.fetch(request);
+}
 
 // dashboard-editor-entry.js
 var html = `<!doctype html>
@@ -1143,7 +1141,7 @@ var ASSETS = {
 };
 var dashboard_editor_entry_default = {
   fetch(request, env) {
-    return worker_default.fetch(request, { ...env, ASSETS });
+    return serveWorker(request, env, ASSETS);
   }
 };
 export {
