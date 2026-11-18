@@ -1,6 +1,7 @@
 import { onRequest } from '../functions/_middleware.js';
 import { household } from './household.js';
 import { trips } from './trips.js';
+import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
@@ -11,8 +12,10 @@ export async function serveWorker(request, env, assets = env.ASSETS) {
   if (pathname === '/api/household/session' && request.method === 'POST') {
     return openHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE);
   }
-  const route = pathname === '/api/trips' ? trips : household;
-  if (['/api/household', '/api/calendar/events', '/api/trips'].includes(pathname) &&
+  if (pathname === '/api/todo/callback') return todoCallback(request, env);
+  const todoPath = pathname === '/api/todo' || pathname.startsWith('/api/todo/');
+  const route = todoPath ? todo : pathname === '/api/trips' ? trips : household;
+  if ((todoPath || ['/api/household', '/api/calendar/events', '/api/trips'].includes(pathname)) &&
       await hasHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE)) {
     return route(request, env);
   }

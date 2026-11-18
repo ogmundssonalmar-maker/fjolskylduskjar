@@ -31,6 +31,10 @@ function readHousehold(db) {
   return withHouseholdTable(db, () => db.prepare('SELECT version, tasks, meals FROM household WHERE id = 1').first());
 }
 
+export async function readApprovedShopping(db) {
+  return storedMenu(await readHousehold(db)).shopping;
+}
+
 function validState(state) {
   return Number.isSafeInteger(state?.version) && state.version >= 0
     && Array.isArray(state.tasks) && state.tasks.length <= 250

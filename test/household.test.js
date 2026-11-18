@@ -339,3 +339,70 @@ test('approval imports recipe ingredients and shares checked items while preserv
   assert.equal(updated.shopping.items.find(item => item.id === beef.id).done, false);
   assert.equal(kronan.mock.callCount(), 1);
 });
+
+test('Microsoft To Do connects an owned shared list and exports shopping without duplicate tasks', async t => {
+  const base = 'https://fjolskylduskjar.ogmundssonalmar.workers.dev';
+  const DB = testD1(t);
+  const env = { DB, HOUSEHOLD_EDIT_CODE:'local-test-edit-code',
+    MS_TODO_CLIENT_ID:'test-microsoft-client', MS_TODO_CLIENT_SECRET:'test-microsoft-long-secret' };
+  const call = (path, method='GET', body, cookie='') => worker.fetch(new Request(base+path,{
+    method, headers:{ Origin:base, Cookie:cookie, 'Content-Type':'application/json' },
+    body:body === undefined ? undefined : JSON.stringify(body),
+  }),env);
+  assert.equal((await call('/api/todo')).status,403);
+  const session = await call('/api/household/session','POST',{code:env.HOUSEHOLD_EDIT_CODE});
+  const cookie = session.headers.get('Set-Cookie').split(';')[0];
+  const start = await call('/api/todo/connect','POST',{},cookie);
+  assert.equal(start.status,200);
+  const stateCookie = start.headers.get('Set-Cookie').split(';')[0];
+  const auth = new URL((await start.json()).url);
+  assert.equal(auth.origin,'https://login.microsoftonline.com');
+  assert.equal(auth.searchParams.get('code_challenge_method'),'S256');
+  assert.match(auth.searchParams.get('scope'),/Tasks.ReadWrite/);
+  assert.equal(auth.searchParams.get('redirect_uri'),base+'/api/todo/callback');
+
+  const microsoftTasks = [{id:'manual-1',title:'Salt',status:'notStarted',body:{content:'Handskráð'}}];
+  const batches = [];
+  t.mock.method(globalThis,'fetch',async (url,options) => {
+    const address = new URL(url);
+    if (address.hostname === 'login.microsoftonline.com') {
+      assert.equal(options.body.get('grant_type'),'authorization_code');
+      assert.match(options.body.get('code_verifier'),/^[a-zA-Z0-9_-]{43,128}$/);
+      return Response.json({access_token:'test-ms-access-token',refresh_token:'test-ms-refresh-token',expires_in:3600});
+    }
+    assert.equal(options.headers.Authorization,'Bearer test-ms-access-token');
+    if (address.pathname === '/v1.0/me/todo/lists') return Response.json({value:[
+      {id:'list-family',displayName:'Innkaup',isShared:true,isOwner:true},
+      {id:'list-other',displayName:'Annar listi',isShared:true,isOwner:false},
+    ]});
+    if (address.pathname === '/v1.0/me/todo/lists/list-family/tasks') return Response.json({value:microsoftTasks});
+    assert.equal(address.pathname,'/v1.0/$batch');
+    const { requests } = JSON.parse(options.body);
+    batches.push(requests);
+    for (const task of requests) {
+      assert.equal(task.url,'/me/todo/lists/list-family/tasks');
+      assert.equal(task.method,'POST');
+      microsoftTasks.push({id:'shopping-'+task.id,status:'notStarted',...task.body});
+    }
+    return Response.json({responses:requests.map(task=>({id:task.id,status:201}))});
+  });
+  const invalid = await call('/api/todo/callback?code=test&state=wrong','GET',undefined,stateCookie);
+  assert.equal(invalid.headers.get('Location'),'/?todo=villa');
+  const callback = await call('/api/todo/callback?code=test&state='+auth.searchParams.get('state'),'GET',undefined,stateCookie);
+  assert.equal(callback.headers.get('Location'),'/?todo=tengt');
+  const row = DB.prepare('SELECT tokens FROM todo_connection').first();
+  assert.equal(row.tokens.includes('test-ms-refresh-token'),false);
+  const lists = await (await call('/api/todo/lists','GET',undefined,cookie)).json();
+  assert.deepEqual(lists.lists,[{id:'list-family',name:'Innkaup'}]);
+  assert.equal((await call('/api/todo/list','PUT',{id:'list-other'},cookie)).status,400);
+  assert.equal((await call('/api/todo/list','PUT',{id:'list-family'},cookie)).status,200);
+  const meals = Array.from({length:7},()=>({day:'Mán',name:'Afgangar',minutes:null,url:''}));
+  meals[0] = {...meals[0], name:'Súpa',ingredients:['2 dl mjólk','Salt']};
+  await call('/api/household','PUT',{version:0,tasks:[],meals,shoppingAction:{type:'approve'}},cookie);
+  const first = await (await call('/api/todo/export','POST',{},cookie)).json();
+  assert.deepEqual(first,{added:1,updated:0,skipped:1,failed:0});
+  const second = await (await call('/api/todo/export','POST',{},cookie)).json();
+  assert.deepEqual(second,{added:0,updated:0,skipped:2,failed:0});
+  assert.equal(batches.length,1);
+  assert.deepEqual(microsoftTasks[0],{id:'manual-1',title:'Salt',status:'notStarted',body:{content:'Handskráð'}});
+});

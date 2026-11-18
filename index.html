@@ -73,6 +73,12 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 #shoppingList .check small{color:var(--muted)}
 #shoppingStatus,#shoppingMessage{margin:9px 0}
 .shopping-actions{margin-bottom:12px}
+#todoActions{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+#todoActions h3{font-size:15px;margin:0 0 7px}
+#todoActions p{margin:6px 0}
+#todoListForm label{display:block;font-weight:650;margin-bottom:9px}
+#todoListForm select{font:inherit;display:block;width:100%;margin-top:5px;padding:8px;border:1px solid var(--border);border-radius:8px;background:white}
+#todoButtons{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
 [hidden]{display:none!important}
 </style></head><body>
 <div class="shell">
@@ -123,6 +129,19 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       </div>
       <p class="help" id="shoppingMessage" role="status" hidden></p>
       <div id="shoppingList"></div>
+      <section id="todoActions" aria-labelledby="todoHeading" hidden>
+        <h3 id="todoHeading">Microsoft To Do</h3>
+        <p class="help" id="todoStatus"></p>
+        <form id="todoListForm" hidden>
+          <label>Sameiginlegur innkaupalisti <select name="list" required></select></label>
+          <button class="outline" type="submit">Nota þennan lista</button>
+        </form>
+        <div id="todoButtons">
+          <button class="outline" type="button" id="todoConnect" hidden>Tengja reikning Oddnýjar</button>
+          <button class="outline" type="button" id="todoSend" hidden>Senda í Microsoft To Do</button>
+        </div>
+        <p class="help" id="todoMessage" role="status" hidden></p>
+      </section>
       <div class="links"><a target="_blank" rel="noopener noreferrer" href="https://kronan.is/snjallverslun/uppskriftir">Uppskriftir Krónunnar ↗</a></div>
     </article>
   </div>
@@ -265,7 +284,7 @@ function load(k,v){try{const data=localStorage.getItem(k);return data?JSON.parse
 let meals=load('family-menu-v2',defaultMeals);
 let shopping=null;
 let tasks=load('family-tasks-v2',[]);
-function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}if(page==='journeys')refreshTripPlans()}
+function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}if(page==='journeys')refreshTripPlans();if(page==='food'&&version!==null)refreshTodo()}
 document.querySelectorAll('#tabs button').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
 function overlaps(e,d){return e.start<=d&&e.end>=d}
 function prettyTime(e){return e.time||''}
@@ -455,6 +474,7 @@ async function refreshShared() {
     if (response.status === 403 && !saving) {
       version = null;
       shopping = null;
+      todoState = null;
       renderShopping();
       syncUnlock.hidden = false;
       syncStatus.textContent = 'Virkjaðu samstillingu til að deila verkefnum og matseðli.';
@@ -473,6 +493,7 @@ async function refreshShared() {
       renderShared();
     }
     syncUnlock.hidden = true;
+    if (todoState === null && document.querySelector('.page.active')?.dataset.page === 'food') refreshTodo();
     syncStatus.textContent = version === 0
       ? 'Fyrsta vistun deilir verkefnum og matseðli úr þessum vafra.'
       : 'Verkefni og matseðill samstillt milli tækja.';
@@ -637,6 +658,7 @@ function setShoppingMessage(message) {
   shoppingMessage.hidden = !message;
 }
 function renderShopping() {
+  renderTodo();
   const menu = JSON.stringify(meals.map(({ name, ingredients = [] }) => [name, ...ingredients]));
   menuApprove.textContent = shopping ? 'Samþykkja og uppfæra lista' : 'Samþykkja matseðil';
   if (!shopping) {
@@ -682,6 +704,101 @@ shoppingList.addEventListener('change', async event => {
     draft.shoppingAction = { type:'toggle', id:checkbox.dataset.shoppingId, done:checkbox.checked };
   });
   setShoppingMessage(saved ? '' : 'Breytingin vistaðist ekki. Reyndu aftur.');
+});
+
+const todoActions = document.getElementById('todoActions');
+const todoStatus = document.getElementById('todoStatus');
+const todoMessage = document.getElementById('todoMessage');
+const todoConnect = document.getElementById('todoConnect');
+const todoSend = document.getElementById('todoSend');
+const todoListForm = document.getElementById('todoListForm');
+let todoState = null;
+let readingTodo = false;
+
+function setTodoMessage(message) {
+  todoMessage.textContent = message;
+  todoMessage.hidden = !message;
+}
+function renderTodo() {
+  todoActions.hidden = version === null || !todoState;
+  todoConnect.hidden = !todoState?.configured;
+  todoConnect.textContent = todoState?.connected ? 'Tengja aftur' : 'Tengja reikning Oddnýjar';
+  todoSend.hidden = !todoState?.list;
+  todoSend.disabled = !shopping?.items.some(item => !item.done);
+  todoListForm.hidden = !todoState?.lists?.length || Boolean(todoState.list);
+  todoStatus.textContent = todoState?.list ? 'Listi: ' + todoState.list
+    : todoState?.connected ? 'Veldu sameiginlega innkaupalistann.'
+    : todoState?.configured ? 'Oddný tengir reikninginn sem á innkaupalistann.'
+    : 'Bíður uppsetningar.';
+}
+async function todoRequest(path = '', method = 'GET', data) {
+  const response = await fetch('/api/todo' + path, {
+    method, cache:'no-store',
+    ...(method !== 'GET' ? { headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data || {}) } : {}),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Ekki tókst að tengjast Microsoft To Do.');
+  return result;
+}
+async function refreshTodo() {
+  if (readingTodo || version === null) return;
+  readingTodo = true;
+  try {
+    const state = await todoRequest();
+    todoState = state;
+    if (state.connected && !state.list) {
+      const { lists } = await todoRequest('/lists');
+      state.lists = lists;
+      todoListForm.elements.list.replaceChildren(...lists.map(list => new Option(list.name, list.id)));
+      if (!lists.length) setTodoMessage('Enginn sameiginlegur listi fannst hjá þessum eiganda.');
+    }
+  } catch (error) {
+    setTodoMessage(error.message);
+  } finally {
+    readingTodo = false;
+    renderTodo();
+  }
+}
+todoConnect.addEventListener('click', async () => {
+  todoConnect.disabled = true;
+  setTodoMessage('');
+  try {
+    const { url } = await todoRequest('/connect', 'POST');
+    window.location.assign(url);
+  } catch (error) {
+    setTodoMessage(error.message);
+    todoConnect.disabled = false;
+  }
+});
+todoListForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = todoListForm.querySelector('button');
+  submit.disabled = true;
+  try {
+    const { list } = await todoRequest('/list', 'PUT', { id:todoListForm.elements.list.value });
+    todoState.list = list;
+    setTodoMessage('Sameiginlegi listinn var tengdur.');
+    renderTodo();
+  } catch (error) {
+    setTodoMessage(error.message);
+  } finally {
+    submit.disabled = false;
+  }
+});
+todoSend.addEventListener('click', async () => {
+  todoSend.disabled = true;
+  setTodoMessage('Sendi innkaupalistann …');
+  try {
+    const result = await todoRequest('/export', 'POST');
+    const details = result.added + ' bætt við, ' + result.updated + ' uppfærð.';
+    setTodoMessage(result.failed
+      ? details + ' ' + result.failed + ' atriði náðu ekki í gegn. Ýttu aftur til að reyna við þau.'
+      : details + (result.skipped ? ' ' + result.skipped + ' atriði voru þegar á listanum.' : ''));
+  } catch (error) {
+    setTodoMessage(error.message);
+  } finally {
+    renderTodo();
+  }
 });
 
 function monthStart(month, offset = 0) {
@@ -950,6 +1067,14 @@ tripList.addEventListener('click', async event => {
   }
 });
 renderShared();renderMonth();renderSchool();renderTrips();
+const todoReturn = new URL(location.href).searchParams.get('todo');
+if (todoReturn) {
+  const currentUrl = new URL(location.href);
+  currentUrl.searchParams.delete('todo');
+  history.replaceState(null, '', currentUrl);
+  go('food');
+  if (todoReturn === 'villa') setTodoMessage('Microsoft-innskráningunni var ekki lokið. Prófaðu að tengja aftur.');
+}
 if (location.protocol === 'https:' || location.protocol === 'http:') {
   refreshShared();
   refreshCalendar();

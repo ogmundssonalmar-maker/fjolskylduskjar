@@ -59,3 +59,9 @@ Eigandi hefur samþykkt skrifaðgang fyrir Fjölskyldudagatalið. Til að virkja
 ## Innkaupalisti
 
 Samþykki matseðils býr til sameiginlegan innkaupalista. Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu. Fyrir máltíðir með Krónuuppskrift og auðan hráefnalista les Workerinn hráefnin úr [opinberri lestrartengingu Krónunnar](https://www.kronan.is/frettir/voruurval-kronunnar-adgengilegt-i-claude) og miðar magnið við fjóra þegar skammtastærð er tiltæk. Ef þjónustan svarar ekki notar skjárinn vistaða hráefnalista fyrir Krónuréttina sem fylgja dæmimatseðlinum. Samþykkti listinn og hak við keypt atriði geymast með matseðlinum í D1. Breytingar á drögum taka gildi á listanum við næsta samþykki.
+
+### Microsoft To Do
+
+Skráið vefumsókn í Microsoft Entra App registrations fyrir bæði Microsoft-vinnu- og persónulega reikninga og bætið við Web redirect URI `https://fjolskylduskjar.ogmundssonalmar.workers.dev/api/todo/callback`. Bætið við Microsoft Graph **delegated** heimildinni `Tasks.ReadWrite`. Setjið Application (client) ID sem `MS_TODO_CLIENT_ID` og **gildi** client secret sem `MS_TODO_CLIENT_SECRET` undir **Runtime variables and secrets → Production**.
+
+Eigandi sameiginlega listans velur **Matseðill → Tengja reikning Oddnýjar** og velur listann eftir að hafa samþykkt Microsoft-heimildina. **Senda í Microsoft To Do** setur ókeypt hráefni úr samþykkta matseðlinum á þann lista. Heimilisskjárinn merkir eigin atriði til að bera kennsl á þau þegar sent er aftur. Hakið við atriði í Microsoft To Do á innkaupum. OAuth-auðkenni geymast dulkóðuð í D1 og lykillinn er leiddur af `MS_TODO_CLIENT_SECRET`. Ef því leyndargildi er skipt út þarf að tengja Microsoft-reikninginn aftur.
