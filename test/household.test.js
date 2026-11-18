@@ -59,3 +59,14 @@ test('calendar uses OAuth, follows pages and preserves recurring occurrences', a
   assert.deepEqual(data.events.map(({ start, end }) => [start, end]),
     [['2026-11-19', '2026-11-19'], ['2026-11-26', '2026-11-26']]);
 });
+
+test('Worker serves calendar reads without signing in while protecting shared state', async () => {
+  const base = 'https://example.com';
+  const calendar = await worker.fetch(new Request(base + '/api/calendar'), {});
+  assert.equal(calendar.status, 200);
+  assert.deepEqual(await calendar.json(), { connected: false, events: [] });
+
+  for (const [path, method] of [['/api/calendar', 'POST'], ['/api/household', 'GET'], ['/api/household', 'PUT']]) {
+    assert.equal((await worker.fetch(new Request(base + path, { method }), {})).status, 403);
+  }
+});

@@ -43,7 +43,7 @@ export async function readCalendar(env, now = new Date()) {
           ? JSON.stringify([item.iCalUID, occurrence.date || new Date(occurrence.dateTime).toISOString()])
           : id + ':' + item.id;
         events.set(key, { start, end: end < start ? start : end, time,
-          title: item.summary || 'Viðburður', type: 'dagatal', note: item.location || '' });
+          title: item.summary || 'Viðburður', type: 'dagatal', note: '' });
       }
       if (!page.nextPageToken) break;
       url.searchParams.set('pageToken', page.nextPageToken);
