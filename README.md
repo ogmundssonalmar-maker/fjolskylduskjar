@@ -1,44 +1,30 @@
-# Heima hjá okkur — frumgerð v2
+# Heima hjá okkur
 
-Ein einföld HTML/CSS/JavaScript-síða fyrir fjölskylduyfirlit. Engin npm-uppsetning eða build-skref nauðsynlegt.
+Íslenskur fjölskylduskjár sem byggir á v2 frumgerðinni. HTML, CSS og JavaScript sjá um viðmótið. Cloudflare Pages Functions sannreyna innskráningu á netþjóni.
 
-## Athugið: einkagögn og öryggi
+## Staðbundin þróun
 
-`index.html` inniheldur persónulegar upplýsingar um dagskrá, leikskóla, ferðir og fjölskyldu. **Ekki setja í opinbert GitHub-repository og ekki birta á opinni Cloudflare Pages-slóð.** `robots=noindex` er **ekki** aðgangsstýring.
+Keyrið `npm ci` og `npm test` með Node.js 22 eða nýrra. `npm run build` býr til `dist/`. Til að skoða viðmótið staðbundið má opna `index.html` beint. Verkefni og breytingar á dæmimatseðli vistast í viðkomandi vafra. Sameiginleg vistun, lifandi dagatal og veður bíða síðari áfanga.
 
-1. Notið **private GitHub repository**.
-2. Setjið **Cloudflare Access** fyrir allt Pages-svæðið (OTP innskráning heimiluð aðeins til aðilanna sem eiga að sjá síðuna) **áður** en slóð er deilt. Staðfestið með óinnskráðum vafra að aðgangur sé lokaður. Farið yfir hvort preview-slóðir og sérlén séu einnig varin.
-3. Ef ekki er hægt að tryggja aðgangsstýringu, fjarlægið öll raunveruleg fjölskyldugögn úr skránni og notið aðeins sýnidæmi.
-4. Aldrei vista Google OAuth client secrets eða önnur lykilorð í HTML/JavaScript eða GitHub. Fyrir lifandi samstillingu þarf server-side OAuth/API og örugga vöktun heimilda.
+Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni. Hún inniheldur dæmimatseðil. V2 gögnin eru í fyrri útgáfu og eiga heima í vernduðum gagnagrunni þegar aðgangsstýring hefur verið staðfest. Berið leikskóladagsetningar undir PDF-heimildina fyrir innflutning.
 
-## Cloudflare Pages úr GitHub
+## Cloudflare Pages
 
-- Create application > Pages > Connect to Git > veljið private repo.
-- Production branch: `main`.
-- Framework preset: None.
-- Build command: autt eða `exit 0`.
-- Build output directory: `.` (repository-root, inniheldur `index.html`).
-- Setjið Cloudflare Access reglur áður en persónuleg vefslóð er tekin í notkun.
-- Eftir git push á `main` uppfærist síðan sjálfkrafa samkvæmt Git samþættingu Pages.
+1. Staðfestið að GitHub-geymslan sé **Private** áður en hýsing er tengd. V2 gögn eru í Git-sögunni.
+2. Tengið geymsluna við Cloudflare Pages með `main` sem production-grein, `npm run build` sem byggingarskipun og `dist` sem úttaksmöppu. Veljið Node.js 22 eða nýrra. Haldið sjálfvirkum preview-útgáfum óvirkum þar til Access-reglur fyrir þær eru tilbúnar.
+3. Setjið upp Cloudflare Access fyrir production og öll notuð sérlén. Virkið Access fyrir preview í Pages og yfirfarið að bæði greinavísar og útgáfuslóðir falli undir regluna. Leyfið aðeins netföng foreldranna. Ef Access nær ekki yfir tiltekið hýsingarheiti þarf Functions-vörnin áfram að skila 403 þar.
+4. Stillið eftirfarandi breytur í Pages Functions fyrir hvort umhverfi. Notið eingöngu AUD-gildi Access-forrita sem eiga við um það umhverfi. Geymið netföngin í Cloudflare-stillingum.
 
-## Það sem virkar í þessari útgáfu
+   | Breyta | Gildi |
+   | --- | --- |
+   | `ACCESS_TEAM_DOMAIN` | Access team-lén, t.d. `example.cloudflareaccess.com` |
+   | `ACCESS_AUDIENCES` | AUD-gildi Access-forrita, aðskilin með kommum ef fleiri en eitt |
+   | `ACCESS_PARENT_EMAILS` | Heimiluð netföng, aðskilin með kommum |
 
-- Dagssýn án klukkutíma-töflu; sýnir aðeins raunverulega skráða viðburði.
-- Áminningar vegna Kanaríferðar, leikskóladaga og skíðaferðar.
-- 7 daga vikuyfirlit, matseðill með Krónu-uppskriftatenglum.
-- Verkefni sem hægt er að haka við / bæta við / eyða, og breyta matseðli.
-- Staðbundin `localStorage` geymsla á hverju tæki. **Ekki samstilling milli tækja.**
+5. Stillið Pages Functions á **Fail closed** svo beiðnum sé hafnað ef keyrslukvóti klárast. Endurútgefið eftir breytingar á stillingum.
 
-## Ekki komið
+## Staðfesting fyrir innflutning fjölskyldugagna
 
-- Lifandi Google Calendar samstilling og uppfærsla.
-- Sameiginlegur verkefnalisti milli síma og skjás.
-- Krónu-innkaupakarfa / vöruverð í rauntíma.
-- Veður, persónusnið, innskráning og Cloudflare Access uppsetning.
-
-## Næsti fasi í Codex
-
-1. Lesið `CODEX_BRIEF.md`.
-2. Bætið við innskráningu, server-side Google Calendar lesaðgangi, öruggum gagnagrunni fyrir verkefni og matseðil.
-3. Hafið OAuth secrets eingöngu á netþjóni (Cloudflare Pages Functions eða Worker), ekki í vafra.
-4. Sjálfvirkt vikumatseðilsgjald/krónu-uppskriftir síðar; ekki gera ráð fyrir að Krónu-ChatGPT-tengingin sé almennt API.
+- Úr óinnskráðum vafra skulu `/`, `/index.html` og `/api/test` skila Access-innskráningu eða aðgangsbanni. Prófið production, upprunalegt `pages.dev` heiti, tengd sérlén og allar virkar preview-slóðir. Athugið að Access-auðkenning er einnig virk fyrir eldri útgáfur eða fjarlægið þær áður en raunveruleg gögn eru flutt inn.
+- Prófið að hvort foreldri komist inn og að utanaðkomandi netfang fái synjun.
+- Athugið `Cache-Control: private, no-store` á vernduðu síðunni og að niðurstaðan á `dist` innihaldi aðeins `index.html` og `_routes.json`. Rót Git-geymslunnar er ekki birtingarmappa.
