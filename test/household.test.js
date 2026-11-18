@@ -1,19 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { household } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
 import worker from '../src/worker.js';
 
-test('two devices share a D1 state and a stale write cannot replace it', async () => {
+test('first access initializes an empty D1 database and stale writes cannot replace shared state', async () => {
   const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(readFileSync('migrations/0001_household.sql', 'utf8'));
   const DB = {
     prepare(sql) {
       const stmt = sqlite.prepare(sql);
       return {
         first: () => stmt.get(),
+        run: () => ({ meta: stmt.run() }),
         bind: (...values) => ({ run: () => ({ meta: stmt.run(...values) }) }),
       };
     },

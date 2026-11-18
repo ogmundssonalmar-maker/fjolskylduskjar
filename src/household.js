@@ -5,6 +5,21 @@ const response = (body, status = 200) => Response.json(body, {
   headers: { 'Cache-Control': 'private, no-store' },
 });
 
+async function withHouseholdTable(database, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!/no such table: household\b/i.test(error?.message ?? '')) throw error;
+    await database.prepare(`CREATE TABLE IF NOT EXISTS household (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      version INTEGER NOT NULL,
+      tasks TEXT NOT NULL,
+      meals TEXT NOT NULL
+    )`).run();
+    return operation();
+  }
+}
+
 function validState(state) {
   return Number.isSafeInteger(state?.version) && state.version >= 0
     && Array.isArray(state.tasks) && state.tasks.length <= 250
@@ -36,7 +51,8 @@ export async function household(request, env) {
   if (!env.DB) return response({ error: 'Gagnagrunnur hefur ekki verið tengdur.' }, 503);
 
   if (request.method === 'GET') {
-    const state = await env.DB.prepare('SELECT version, tasks, meals FROM household WHERE id = 1').first();
+    const state = await withHouseholdTable(env.DB, () =>
+      env.DB.prepare('SELECT version, tasks, meals FROM household WHERE id = 1').first());
     return response(state ? { version: state.version, tasks: JSON.parse(state.tasks),
       meals: JSON.parse(state.meals) } : { version: 0 });
   }
@@ -59,11 +75,13 @@ export async function household(request, env) {
   const tasks = JSON.stringify(state.tasks.map(({ name, done }) => ({ name, done })));
   const meals = JSON.stringify(state.meals.map(({ day, name, minutes, url }) => ({ day, name, minutes, url })));
   // One conditional write prevents simultaneous edits from overwriting one another.
-  const statement = state.version === 0
-    ? env.DB.prepare('INSERT INTO household VALUES (1, 1, ?, ?) ON CONFLICT(id) DO NOTHING').bind(tasks, meals)
-    : env.DB.prepare('UPDATE household SET version = version + 1, tasks = ?, meals = ? WHERE id = 1 AND version = ?')
-      .bind(tasks, meals, state.version);
-  const result = await statement.run();
+  const result = await withHouseholdTable(env.DB, () => {
+    const statement = state.version === 0
+      ? env.DB.prepare('INSERT INTO household VALUES (1, 1, ?, ?) ON CONFLICT(id) DO NOTHING').bind(tasks, meals)
+      : env.DB.prepare('UPDATE household SET version = version + 1, tasks = ?, meals = ? WHERE id = 1 AND version = ?')
+        .bind(tasks, meals, state.version);
+    return statement.run();
+  });
   return result.meta.changes
     ? response({ version: state.version + 1 })
     : response({ error: 'Breyting var vistuð úr öðru tæki.' }, 409);

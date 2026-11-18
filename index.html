@@ -42,7 +42,7 @@
 [hidden]{display:none!important}
 </style></head><body>
 <div class="shell">
-<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><button type="button" class="textbutton" id="syncUnlock" hidden>Virkja samstillingu</button><br><strong id="syncStatus" role="status">Verkefni og matseðill vistast í þessum vafra.</strong><br><span id="calendarStatus">Sýni vistað afrit af dagskránni.</span></div></header>
+<header class="masthead"><div class="brand"><div class="brand-symbol">⌂</div><div><div class="brand-name">Heima hjá okkur</div><small>Sameiginlegt fjölskylduyfirlit</small></div></div><div class="status"><button type="button" class="textbutton" id="syncUnlock">Virkja samstillingu</button><br><strong id="syncStatus" role="status">Verkefni og matseðill vistast í þessum vafra.</strong><br><span id="calendarStatus">Sýni vistað afrit af dagskránni.</span></div></header>
 <nav class="tabs" id="tabs" aria-label="Valmynd"><button data-page="home" class="active">Yfirlit</button><button data-page="month">Dagskrá</button><button data-page="food">Matseðill</button><button data-page="nursery">Marbakki</button><button data-page="journeys">Ferðir</button><button data-page="todos">Verkefni</button></nav>
 <section class="page active" data-page="home">
  <div class="headline"><div><div class="eyebrow" id="headerWeek">Fjölskyldudagurinn</div><h1 id="todayLabel">Góðan daginn</h1><p class="lede">Það sem er á dagskrá, þarf að muna og verður í matinn.</p></div><div class="weather"><div class="symbol">◌</div><b>Veðurspá</b><small>Til að tengja síðar</small></div></div>
@@ -245,7 +245,9 @@ async function refreshShared() {
       ? 'Fyrsta vistun deilir verkefnum og matseðli úr þessum vafra.'
       : 'Verkefni og matseðill samstillt milli tækja.';
   } catch {
-    if (version !== null) syncStatus.textContent = 'Samstilling rofnaði. Reynt verður aftur.';
+    syncStatus.textContent = version === null
+      ? 'Samstilling svarar ekki. Verkefni og matseðill vistast í þessum vafra.'
+      : 'Samstilling rofnaði. Reynt verður aftur.';
   }
 }
 
