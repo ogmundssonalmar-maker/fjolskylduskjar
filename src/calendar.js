@@ -94,7 +94,7 @@ export async function readCalendar(env, now = new Date(), month = null) {
           ? JSON.stringify([item.iCalUID, occurrence.date || new Date(occurrence.dateTime).toISOString()])
           : id + ':' + item.id;
         events.set(key, { start, end: end < start ? start : end, time, endTime,
-          title: item.summary || 'Viðburður', type: 'dagatal', note: '',
+          title: item.summary || 'Viðburður', type: item.extendedProperties?.private?.dashboardEventType === 'trip' ? 'ferd' : 'dagatal', note: '',
           owner: eventOwner(item), htmlLink: googleEventLink(item.htmlLink) });
       }
       if (!page.nextPageToken) break;
@@ -105,13 +105,13 @@ export async function readCalendar(env, now = new Date(), month = null) {
     ...(writeCalendarId(env) ? { canCreateEvents: true } : {}) };
 }
 
-function dateAtMidnight(date) {
+export function dateAtMidnight(date) {
   if (typeof date !== 'string' || !/^[2-9]\d{3}-\d{2}-\d{2}$/.test(date)) return NaN;
   const time = Date.parse(date + 'T00:00:00Z');
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? time : NaN;
 }
 
-function newCalendarEvent(input) {
+function newCalendarEvent(input, trip) {
   if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 160 ||
       typeof input.id !== 'string' || !/^[0-9a-f]{32}$/.test(input.id) ||
       typeof input.owner !== 'string' || !Object.hasOwn(owners, input.owner)) return null;
@@ -139,14 +139,14 @@ function newCalendarEvent(input) {
   }
   return {
     id: input.id, summary: input.title.trim(), start, end, colorId: owners[input.owner],
-    extendedProperties: { private: { dashboardOwner: input.owner } },
+    extendedProperties: { private: { dashboardOwner: input.owner, ...(trip ? { dashboardEventType: 'trip' } : {}) } },
   };
 }
 
-export async function addCalendarEvent(env, input) {
+export async function addCalendarEvent(env, input, { trip = false } = {}) {
   const id = writeCalendarId(env);
   if (!id) throw new CalendarError('calendar_write_disabled');
-  const event = newCalendarEvent(input);
+  const event = newCalendarEvent(input, trip);
   if (!event) throw new CalendarError('invalid_calendar_event');
   const token = await calendarToken(env);
   const url = eventUrl(id);
@@ -165,7 +165,8 @@ export async function addCalendarEvent(env, input) {
         : Date.parse(left?.dateTime) === Date.parse(right.dateTime);
       if (existing.summary === event.summary && sameTime(existing.start, event.start) &&
           sameTime(existing.end, event.end) &&
-          existing.extendedProperties?.private?.dashboardOwner === input.owner) {
+          existing.extendedProperties?.private?.dashboardOwner === input.owner &&
+          (!trip || existing.extendedProperties?.private?.dashboardEventType === 'trip')) {
         return { htmlLink: googleEventLink(existing.htmlLink) };
       }
     }

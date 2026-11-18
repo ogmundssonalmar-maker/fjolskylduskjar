@@ -31,12 +31,20 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .dayev.owner-children,.badge.owner-children,.calendar-legend .owner-children{background:#fff1da;color:#75420c;border-color:#c48232}
 .calendar-legend{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:15px}
 .calendar-legend .badge{margin-left:0}
-#eventDialog{border:1px solid var(--border);border-radius:15px;padding:22px;width:min(430px,calc(100% - 32px));color:var(--ink)}
-#eventDialog::backdrop{background:#14261b80}
-#eventDialog h2{margin:0 0 14px}
-#eventForm label{display:block;font-weight:650;margin:9px 0}
-#eventForm input,#eventForm select{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
-.event-time-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+#tripDialog,#eventDialog{border:1px solid var(--border);border-radius:15px;padding:22px;width:min(430px,calc(100% - 32px));color:var(--ink)}
+#tripDialog::backdrop,#eventDialog::backdrop{background:#14261b80}
+#tripDialog h2,#eventDialog h2{margin:0 0 14px}
+#tripForm label,#eventForm label{display:block;font-weight:650;margin:9px 0}
+#tripForm input,#eventForm input,#eventForm select{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
+.event-time-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.trip-card h4{margin:14px 0 6px;color:var(--forest)}
+.trip-card .tripitem{margin-top:0}
+.trip-card .newtask{margin-top:8px}
+.trip-card .check button{font-size:16px}
+.trip-date-fields input{min-width:0}
+.trip-heading{align-items:center}
+.trip-heading .solid{white-space:nowrap}
+#tripList{align-items:start}
 .month-day-number{align-self:start;display:grid;place-items:center;min-width:25px;height:25px;font-size:13px;font-weight:800}
 .month-day-select[aria-current="date"] .month-day-number{background:var(--forest);color:white;border-radius:50%}
 .month-event{display:block;margin:0;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
@@ -94,7 +102,14 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 </section>
 <section class="page" data-page="food"><div class="page-intro"><div class="eyebrow">Matarplanið</div><h1>Vikumatseðillinn</h1><p>Hér má breyta réttum og uppskriftatenglum.</p></div><div class="two"><article class="card"><div id="menuAll"></div></article><article class="card"><h2>Innkaupin</h2><p class="sub">Næsti áfangi: sjálfvirkur innkaupalisti eftir samþykki matseðils.</p><div class="warning">Krónutengingin er aðgengileg í ChatGPT en ekki enn tengd þessari HTML-síðu. Engin pöntun eða lifandi verðleit fer fram hér.</div><div class="links"><a target="_blank" rel="noopener noreferrer" href="https://kronan.is/snjallverslun/uppskriftir">Skoða uppskriftir í Snjallverslun ↗</a></div></article></div></section>
 <section class="page" data-page="nursery"><div class="page-intro"><div class="eyebrow">Marbakki · 2026–2027</div><h1>Leikskóladagatalið</h1><p>Skipulagsdagar, skráningardagar og viðburðir foreldra.</p></div><article class="card"><div id="schoolList"></div><div class="links"><a href="https://marbakki.kopavogur.is/foreldrar/leikskoladagatal/" target="_blank" rel="noopener noreferrer">Skóladagatal Marbakka ↗</a></div></article></section>
-<section class="page" data-page="journeys"><div class="page-intro"><div class="eyebrow">Frí og ferðalög</div><h1>Ferðir fram undan</h1><p>Yfirlit yfir ferðir og áhrif þeirra á fjölskyldudagskrána.</p></div><div class="two" id="tripList"></div></section>
+<section class="page" data-page="journeys">
+  <div class="page-intro section-head trip-heading">
+    <div><h1>Ferðir</h1><p>Dagsetningar og gátlistar fyrir ferðir fjölskyldunnar.</p></div>
+    <button class="solid" type="button" id="openTripDialog">Bæta við ferð</button>
+  </div>
+  <p class="help" id="tripStatus" role="status" hidden></p>
+  <div class="two" id="tripList"></div>
+</section>
 <section class="page" data-page="todos"><div class="page-intro"><div class="eyebrow">Sameiginleg mál</div><h1>Verkefnalistinn</h1><p>Hægt er að bæta við, breyta, haka við og eyða.</p></div><article class="card"><div id="allTasks"></div><div class="newtask"><input id="newTask" placeholder="Bæta við verkefni…" maxlength="180" aria-label="Nýtt verkefni"><button onclick="addTask()">Bæta við</button></div></article></section>
 <dialog id="syncDialog" aria-labelledby="syncDialogHeading">
   <form id="syncForm">
@@ -132,6 +147,22 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     </div>
   </form>
 </dialog>
+<dialog id="tripDialog" aria-labelledby="tripDialogHeading">
+  <form id="tripForm">
+    <h2 id="tripDialogHeading">Bæta við ferð</h2>
+    <label>Heiti ferðar <input name="title" required maxlength="160"></label>
+    <div class="event-time-fields trip-date-fields">
+      <label>Upphafsdagur <input name="start" type="date" required></label>
+      <label>Lokadagur <input name="end" type="date" required></label>
+    </div>
+    <p class="help">Dagsetningarnar fara í Fjölskyldudagatalið sem heilsdagsviðburður.</p>
+    <p class="help" id="tripDialogStatus" role="status"></p>
+    <div class="month-controls">
+      <button class="outline" type="button" id="closeTripDialog">Hætta við</button>
+      <button class="solid" type="submit" id="tripSubmit">Vista ferð</button>
+    </div>
+  </form>
+</dialog>
 <footer class="bottomline"><span>Heima hjá okkur</span></footer>
 </div>
 <script>
@@ -163,7 +194,7 @@ const school = [
   {"start": "2027-07-19", "end": "2027-07-23", "title": "Sumarlokun Marbakka", "type": "lokun", "note": "Leikskóli lokaður."},
   {"start": "2027-07-26", "end": "2027-07-30", "title": "Sumarlokun Marbakka", "type": "lokun", "note": "Leikskóli lokaður."}
 ];
-const trips = [{"start":"2026-12-27","end":"2027-01-03","title":"Fjölskylduferð til Kanarí","type":"ferd","note":"27. desember til 3. janúar; samkvæmt upplýsingum frá fjölskyldu"},{"start":"2027-01-23","end":"2027-01-30","title":"Foreldraferð á skíði","type":"ferd","note":"23.–30. janúar; þarf að skipuleggja barnapössun og akstur á æfingar"}];
+const trips = [{"id":"kanari-2026","start":"2026-12-27","end":"2027-01-03","title":"Fjölskylduferð til Kanarí","type":"ferd","note":"27. desember til 3. janúar; samkvæmt upplýsingum frá fjölskyldu"},{"id":"skidi-2027","start":"2027-01-23","end":"2027-01-30","title":"Foreldraferð á skíði","type":"ferd","note":"23.–30. janúar; þarf að skipuleggja barnapössun og akstur á æfingar"}];
 const calendar = [{"start":"2026-11-17","end":"2026-11-22","title":"Panama – Almar","type":"dagatal","note":"Úr afriti dagskrár"},{"start":"2026-11-17","end":"2026-11-17","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-11-24","end":"2026-11-24","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-01","end":"2026-12-01","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-08","end":"2026-12-08","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-15","end":"2026-12-15","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-22","end":"2026-12-22","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2026-12-29","end":"2026-12-29","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-05","end":"2027-01-05","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-12","end":"2027-01-12","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-19","end":"2027-01-19","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"},{"start":"2027-01-26","end":"2027-01-26","time":"17:15","title":"Körfuboltaæfing","type":"dagatal","note":"Kársnesskóli, Holtagerði · 17:15–18:15 · úr afriti dagskrár"}];
 const defaultMeals = [{"day":"Mán","name":"Hakk og spaghetti","minutes":20,"url":"https://kronan.is/uppskriftir/hakk_spaghetti"},{"day":"Þri","name":"Kjúklingur í tikka masala","minutes":20,"url":"https://kronan.is/uppskriftir/kjuklingur_tikkamasala"},{"day":"Mið","name":"Plokkfiskur","minutes":50,"url":"https://kronan.is/uppskriftir/plokkfiskur"},{"day":"Fim","name":"Kjúklinga Alfredo pasta","minutes":30,"url":"https://kronan.is/uppskriftir/alfredo"},{"day":"Fös","name":"Heimagerð pítsa","minutes":null,"url":""},{"day":"Lau","name":"Frjáls dagur / afgangar","minutes":null,"url":""},{"day":"Sun","name":"Rjóma-pestó kjúklingur","minutes":30,"url":"https://kronan.is/uppskriftir/rjomapesto_kjuklingur"}];
 let allEvents=[...school,...trips,...calendar].sort((a,b)=>a.start.localeCompare(b.start));
@@ -192,7 +223,7 @@ function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function load(k,v){try{const data=localStorage.getItem(k);return data?JSON.parse(data):v}catch(e){return v}}
 let meals=load('family-menu-v2',defaultMeals);
 let tasks=load('family-tasks-v2',[]);
-function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}}
+function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}if(page==='journeys')refreshTripPlans()}
 document.querySelectorAll('#tabs button').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
 function overlaps(e,d){return e.start<=d&&e.end>=d}
 function prettyTime(e){return e.time||''}
@@ -294,6 +325,7 @@ syncForm.addEventListener('submit', async event => {
     }
     syncDialog.close();
     await refreshShared();
+    if (tripsPageIsOpen()) await refreshTripPlans();
   } catch {
     syncDialogStatus.textContent = 'Ekki náðist í heimilisskjáinn. Reyndu aftur.';
   } finally {
@@ -593,12 +625,191 @@ async function refreshMonth() {
   }
 }
 function renderSchool(){const upcoming=school.filter(e=>e.end>=today);let month='';let html='';for(const e of upcoming){const m=e.start.slice(0,7);if(m!==month){month=m;html+=`<h3 class="month-title">${formatDate(m+'-01',{month:'long',year:'numeric'})}</h3>`}html+=`<div class="schoolitem"><span>${formatDate(e.start,{day:'numeric',month:'short'})}${e.start===e.end?'':' – '+formatDate(e.end,{day:'numeric',month:'short'})}</span><div><b>${xss(e.title)} <span class="badge ${xss(e.type)}">${xss(typeLabel[e.type]||'Viðburður')}</span></b><p>${xss(e.note||'')}</p></div></div>`}document.getElementById('schoolList').innerHTML=html||'<p class="empty">Engir leikskólaviðburðir skráðir.</p>'}
-function renderTrips(){document.getElementById('tripList').innerHTML=trips.map(t=>`<article class="card"><div class="tripitem"><div class="eyebrow">Ferð</div><h3>${xss(t.title)}</h3><p>${formatDate(t.start,{day:'numeric',month:'long',year:'numeric'})} – ${formatDate(t.end,{day:'numeric',month:'long',year:'numeric'})}</p></div><p class="help">${xss(t.note)}</p></article>`).join('')||'<p class="empty">Engar ferðir skráðar.</p>'}
+const tripList = document.getElementById('tripList');
+const tripStatus = document.getElementById('tripStatus');
+const tripDialog = document.getElementById('tripDialog');
+const tripForm = document.getElementById('tripForm');
+const tripSubmit = document.getElementById('tripSubmit');
+const tripDialogStatus = document.getElementById('tripDialogStatus');
+let tripPlans = null;
+let tripBusy = false;
+let tripRevision = 0;
+let tripDraftId;
+
+function tripsPageIsOpen() {
+  return document.querySelector('.page.active')?.dataset.page === 'journeys';
+}
+function setTripStatus(message) {
+  tripStatus.textContent = message;
+  tripStatus.hidden = !message;
+}
+function allTrips() {
+  const stored = new Map((tripPlans || []).map(trip => [trip.id, trip]));
+  const known = trips.map(trip => ({ checklist: [], version: 0, ...stored.get(trip.id), ...trip }));
+  const newTrips = (tripPlans || []).filter(trip => trip.title);
+  return [...known, ...newTrips].sort((a, b) => a.start.localeCompare(b.start));
+}
+function renderTrips() {
+  const drafts = new Map(Array.from(tripList.querySelectorAll('input[name="task"]'), input =>
+    [input.form.dataset.tripId, input.value]));
+  const focusedTrip = document.activeElement?.name === 'task' ? document.activeElement.form.dataset.tripId : '';
+  tripList.innerHTML = allTrips().map(trip => {
+    const link = eventLink(trip);
+    const pending = tripPlans && !trips.some(entry => entry.id === trip.id) && !trip.synced;
+    const date = date => formatDate(date, { day:'numeric', month:'long', year:'numeric' });
+    const checklist = trip.checklist.map((item, index) =>
+      `<div class="check ${item.done ? 'done' : ''}"><input type="checkbox" data-check="${index}"
+        aria-label="${xss(item.name)}" ${item.done ? 'checked' : ''}><span>${xss(item.name)}</span>
+        <button type="button" data-remove="${index}" aria-label="Fjarlægja ${xss(item.name)}">×</button></div>`).join('');
+    return `<article class="card trip-card" data-trip-card="${xss(trip.id)}">
+      <div class="tripitem"><h3>${xss(trip.title)}</h3><p>${date(trip.start)}${trip.end === trip.start ? '' : ' – ' + date(trip.end)}</p></div>
+      ${trip.note ? `<p class="help">${xss(trip.note)}</p>` : ''}
+      ${link ? `<a href="${xss(link)}" target="_blank" rel="noopener noreferrer">Opna í Google Calendar ↗</a>` : ''}
+      ${pending ? '<p class="help">Bíður samstillingar við Google Calendar.</p><button type="button" class="outline" data-retry>Reyna aftur</button>' : ''}
+      ${tripPlans ? `<h4>Gátlisti</h4>${checklist || '<p class="empty">Engin atriði á gátlista.</p>'}
+        <form class="newtask" data-trip-id="${xss(trip.id)}"><input name="task" required maxlength="160"
+          aria-label="Nýtt atriði" placeholder="Nýtt atriði" value="${xss(drafts.get(trip.id) || '')}">
+          <button type="submit">Bæta við</button></form>` : ''}
+    </article>`;
+  }).join('');
+  if (focusedTrip) {
+    Array.from(tripList.querySelectorAll('form')).find(form => form.dataset.tripId === focusedTrip)
+      ?.elements.task.focus({ preventScroll: true });
+  }
+}
+async function refreshTripPlans() {
+  if (tripBusy) return;
+  const revision = ++tripRevision;
+  try {
+    const response = await fetch('/api/trips', { cache:'no-store' });
+    if (tripBusy || revision !== tripRevision) return;
+    if (response.status === 403) {
+      if (tripPlans !== null) { tripPlans = null; renderTrips(); }
+      setTripStatus('Virkjaðu samstillingu til að bæta við ferðum og nota gátlista.');
+      return;
+    }
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    if (tripBusy || revision !== tripRevision) return;
+    if (tripPlans === null) setTripStatus('');
+    const changed = JSON.stringify(tripPlans) !== JSON.stringify(data.trips);
+    tripPlans = data.trips;
+    if (changed) renderTrips();
+  } catch {
+    if (!tripBusy && revision === tripRevision) setTripStatus('Ekki tókst að sækja ferðaáætlanir. Reynt verður aftur.');
+  }
+}
+async function writeTrip(method, draft) {
+  const response = await fetch('/api/trips', {
+    method, headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(draft),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Ekki tókst að vista. Reyndu aftur.');
+  tripRevision++;
+  tripPlans = [...(tripPlans || []).filter(trip => trip.id !== data.trip.id), data.trip];
+  return data;
+}
+function refreshTripCalendar() {
+  monthCalendar.clear();
+  refreshCalendar();
+}
+document.getElementById('openTripDialog').addEventListener('click', () => {
+  if (tripBusy) return;
+  if (tripPlans === null) {
+    setTripStatus('Virkjaðu samstillingu til að bæta við ferðum og nota gátlista.');
+    syncUnlock.click();
+    return;
+  }
+  tripForm.reset();
+  tripForm.elements.start.value = today;
+  tripForm.elements.end.min = today;
+  tripDraftId = crypto.randomUUID().replaceAll('-', '');
+  tripDialogStatus.textContent = '';
+  tripDialog.showModal();
+});
+tripForm.elements.start.addEventListener('input', () => {
+  tripForm.elements.end.min = tripForm.elements.start.value;
+});
+document.getElementById('closeTripDialog').addEventListener('click', () => tripDialog.close());
+tripForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (tripBusy) return;
+  tripBusy = true;
+  tripSubmit.disabled = true;
+  tripDialogStatus.textContent = '';
+  try {
+    const result = await writeTrip('POST', { ...Object.fromEntries(new FormData(tripForm)), id: tripDraftId });
+    tripDialog.close();
+    renderTrips();
+    setTripStatus(result.warning || 'Ferð vistuð í Fjölskyldudagatalinu.');
+    if (result.trip.synced) refreshTripCalendar();
+  } catch (error) {
+    tripDialogStatus.textContent = error.message;
+  } finally {
+    tripBusy = false;
+    tripSubmit.disabled = false;
+  }
+});
+
+async function changeTripChecklist(card, change, input) {
+  if (tripBusy) { renderTrips(); return; }
+  const trip = allTrips().find(trip => trip.id === card.dataset.tripCard);
+  const checklist = trip.checklist.map(item => ({ ...item }));
+  change(checklist);
+  tripBusy = true;
+  try {
+    await writeTrip('PUT', { id:trip.id, version:trip.version, checklist });
+    if (input) input.value = '';
+    setTripStatus('');
+  } catch (error) {
+    setTripStatus(error.message);
+  } finally {
+    tripBusy = false;
+    renderTrips();
+    await refreshTripPlans();
+  }
+}
+tripList.addEventListener('submit', event => {
+  const form = event.target;
+  if (!form.matches('form[data-trip-id]')) return;
+  event.preventDefault();
+  const input = form.elements.task;
+  const name = input.value.trim();
+  if (name) changeTripChecklist(form.closest('[data-trip-card]'), list => list.push({ name, done:false }), input);
+});
+tripList.addEventListener('change', event => {
+  const input = event.target;
+  if (!input.matches('[data-check]')) return;
+  changeTripChecklist(input.closest('[data-trip-card]'), list => { list[Number(input.dataset.check)].done = input.checked; });
+});
+tripList.addEventListener('click', async event => {
+  const button = event.target.closest('button');
+  const card = button?.closest('[data-trip-card]');
+  if (!card) return;
+  if (button.matches('[data-remove]')) {
+    changeTripChecklist(card, list => list.splice(Number(button.dataset.remove), 1));
+  } else if (button.matches('[data-retry]') && !tripBusy) {
+    const trip = allTrips().find(trip => trip.id === card.dataset.tripCard);
+    tripBusy = true;
+    button.disabled = true;
+    try {
+      const result = await writeTrip('POST', { id:trip.id, title:trip.title, start:trip.start, end:trip.end });
+      setTripStatus(result.warning || 'Ferð vistuð í Fjölskyldudagatalinu.');
+      if (result.trip.synced) refreshTripCalendar();
+    } catch (error) {
+      setTripStatus(error.message);
+    } finally {
+      tripBusy = false;
+      renderTrips();
+    }
+  }
+});
 renderShared();renderMonth();renderSchool();renderTrips();
 if (location.protocol === 'https:' || location.protocol === 'http:') {
   refreshShared();
   refreshCalendar();
   setInterval(refreshShared, 15000);
+  setInterval(() => { if (tripsPageIsOpen()) refreshTripPlans(); }, 15000);
   setInterval(refreshCalendar, 5 * 60000);
   setInterval(() => {
     if (document.querySelector('.page.active')?.dataset.page === 'month') refreshMonth();

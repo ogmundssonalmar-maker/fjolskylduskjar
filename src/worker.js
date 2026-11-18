@@ -1,5 +1,6 @@
 import { onRequest } from '../functions/_middleware.js';
 import { household } from './household.js';
+import { trips } from './trips.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
@@ -10,12 +11,13 @@ export async function serveWorker(request, env, assets = env.ASSETS) {
   if (pathname === '/api/household/session' && request.method === 'POST') {
     return openHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE);
   }
-  if ((pathname === '/api/household' || pathname === '/api/calendar/events') &&
+  const route = pathname === '/api/trips' ? trips : household;
+  if (['/api/household', '/api/calendar/events', '/api/trips'].includes(pathname) &&
       await hasHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE)) {
-    return household(request, env);
+    return route(request, env);
   }
   if (pathname === '/api' || pathname.startsWith('/api/')) {
-    return onRequest({ request, env, next: () => household(request, env) });
+    return onRequest({ request, env, next: () => route(request, env) });
   }
   return assets.fetch(request);
 }

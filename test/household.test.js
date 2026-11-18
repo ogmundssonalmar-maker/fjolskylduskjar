@@ -5,18 +5,26 @@ import { household } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
 import worker from '../src/worker.js';
 
-test('first access initializes an empty D1 database and stale writes cannot replace shared state', async () => {
+function testD1(t) {
   const sqlite = new DatabaseSync(':memory:');
-  const DB = {
+  t.after(() => sqlite.close());
+  return {
     prepare(sql) {
       const stmt = sqlite.prepare(sql);
-      return {
-        first: () => stmt.get(),
-        run: () => ({ meta: stmt.run() }),
-        bind: (...values) => ({ run: () => ({ meta: stmt.run(...values) }) }),
-      };
+      function statement(values) {
+        return {
+          first: () => stmt.get(...values),
+          all: () => ({ results: stmt.all(...values) }),
+          run: () => ({ meta: stmt.run(...values) }),
+        };
+      }
+      return { ...statement([]), bind: (...values) => statement(values) };
     },
   };
+}
+
+test('first access initializes an empty D1 database and stale writes cannot replace shared state', async t => {
+  const DB = testD1(t);
   const url = 'https://example.com/api/household';
   const get = async () => (await household(new Request(url), { DB })).json();
   const put = (state, origin = 'https://example.com') => household(new Request(url, {
@@ -36,7 +44,6 @@ test('first access initializes an empty D1 database and stale writes cannot repl
   assert.equal((await put(second)).status, 200);
   assert.deepEqual(await get(), { ...second, version: 2 });
   assert.equal((await worker.fetch(new Request(url), { DB })).status, 403);
-  sqlite.close();
 });
 
 test('calendar uses OAuth, follows pages and preserves recurring occurrences', async (t) => {
@@ -208,4 +215,70 @@ test('multi-day events include the last date and support overnight timed events'
   ]) {
     await assert.rejects(addCalendarEvent(env, invalid), { code: 'invalid_calendar_event' });
   }
+});
+
+
+test('trips retry the same Google event and keep each checklist private', async t => {
+  const base = 'https://example.com';
+  const env = {
+    DB: testD1(t),
+    HOUSEHOLD_EDIT_CODE: 'local-test-edit-code',
+    GOOGLE_CALENDAR_WRITES_ENABLED: 'true',
+    GOOGLE_CALENDAR_IDS: 'family-calendar',
+    GOOGLE_CLIENT_ID: 'client',
+    GOOGLE_CLIENT_SECRET: 'secret',
+    GOOGLE_REFRESH_TOKEN: 'refresh',
+  };
+  const request = (path, method = 'GET', data, cookie = '') => new Request(base + path, {
+    method, headers: { Cookie: cookie, Origin: base, 'Content-Type': 'application/json' },
+    body: data ? JSON.stringify(data) : undefined,
+  });
+  const call = (...args) => worker.fetch(request(...args), env);
+  const session = await call('/api/household/session', 'POST', { code: env.HOUSEHOLD_EDIT_CODE });
+  const cookie = session.headers.get('Set-Cookie').split(';')[0];
+  const draft = { id: '12345678123412341234123456789abc', title: 'Helgarferð', start: '2026-12-30', end: '2027-01-02' };
+  assert.equal((await call('/api/trips')).status, 403);
+  assert.equal((await call('/api/trips', 'POST', draft)).status, 403);
+
+  const htmlLink = 'https://calendar.google.com/calendar/event?eid=test';
+  let created;
+  let writes = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).includes('oauth2.googleapis.com')) return Response.json({ access_token:'test-token' });
+    if (options.method === 'POST') {
+      const event = JSON.parse(options.body);
+      assert.equal(event.id, draft.id);
+      assert.deepEqual(event.start, { date: draft.start });
+      assert.deepEqual(event.end, { date: '2027-01-03' });
+      assert.equal(event.extendedProperties.private.dashboardEventType, 'trip');
+      created = { ...event, htmlLink };
+      if (++writes === 1) return new Response(null, { status: 503 });
+      return new Response(null, { status: 409 });
+    }
+    if (String(url).endsWith('/' + draft.id)) return Response.json(created);
+    return Response.json({ items: [created] });
+  });
+  const pending = await call('/api/trips', 'POST', draft, cookie);
+  assert.equal(pending.status, 202);
+  assert.equal((await pending.json()).trip.synced, false);
+  const synced = await call('/api/trips', 'POST', draft, cookie);
+  assert.equal(synced.status, 201);
+  assert.equal((await synced.json()).trip.htmlLink, htmlLink);
+  assert.equal((await call('/api/trips', 'POST', draft, cookie)).status, 200);
+  assert.equal(writes, 2);
+
+  const checklist = [{ name: 'Athuga flug', done: true }];
+  for (const id of [draft.id, 'kanari-2026']) {
+    const change = { id, version:0, checklist };
+    const saved = await call('/api/trips', 'PUT', change, cookie);
+    assert.equal(saved.status, 200);
+    assert.equal((await saved.json()).trip.version, 1);
+    assert.equal((await call('/api/trips', 'PUT', change, cookie)).status, 409);
+  }
+  const data = await (await call('/api/trips', 'GET', undefined, cookie)).json();
+  assert.equal(data.trips.length, 2);
+  assert.deepEqual(data.trips.find(trip => trip.id === draft.id).checklist, checklist);
+  const publicCalendar = await (await call('/api/calendar')).json();
+  assert.equal(publicCalendar.events[0].type, 'ferd');
+  assert.equal(publicCalendar.events[0].checklist, undefined);
 });
