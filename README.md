@@ -55,3 +55,7 @@ Setjið sterkan, einstakan kóða sem `HOUSEHOLD_EDIT_CODE` í **Runtime variabl
 Eigandi hefur samþykkt skrifaðgang fyrir Fjölskyldudagatalið. Til að virkja vistun þarf Google refresh token með heimildinni `https://www.googleapis.com/auth/calendar.events` og aðgang til að breyta Fjölskyldudagatalinu. Vista skal refresh token sem `GOOGLE_REFRESH_TOKEN` í Production. Skrifheimild heimilisskjásins er stillt í `wrangler.toml`. Ef fleiri en eitt dagatal er lesið þarf einnig að velja skrifdagatalið með `GOOGLE_CALENDAR_WRITE_ID`, sem verður að vera í `GOOGLE_CALENDAR_IDS`.
 
 Áður en nýr viðburður er vistaður þarf að virkja samstillingu með breytingakóðanum. Viðburðurinn fer á sameiginlega dagatalið. Litaflokkurinn er vistaður með viðburðinum svo hann skili sér í mánaðarsýninni og í Google Calendar.
+
+## Innkaupalisti
+
+Samþykki matseðils býr til sameiginlegan innkaupalista. Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu. Fyrir máltíðir með Krónuuppskrift og auðan hráefnalista les Workerinn hráefnin úr [opinberri lestrartengingu Krónunnar](https://www.kronan.is/frettir/voruurval-kronunnar-adgengilegt-i-claude) og miðar magnið við fjóra þegar skammtastærð er tiltæk. Ef þjónustan svarar ekki notar skjárinn vistaða hráefnalista fyrir Krónuréttina sem fylgja dæmimatseðlinum. Samþykkti listinn og hak við keypt atriði geymast með matseðlinum í D1. Breytingar á drögum taka gildi á listanum við næsta samþykki.

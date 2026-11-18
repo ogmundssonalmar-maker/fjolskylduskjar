@@ -282,3 +282,60 @@ test('trips retry the same Google event and keep each checklist private', async 
   assert.equal(publicCalendar.events[0].type, 'ferd');
   assert.equal(publicCalendar.events[0].checklist, undefined);
 });
+
+test('approval imports recipe ingredients and shares checked items while preserving older saved menus', async t => {
+  const DB = testD1(t);
+  const url = 'https://example.com/api/household';
+  const get = async () => (await household(new Request(url), { DB })).json();
+  const put = data => household(new Request(url, {
+    method: 'PUT', headers: { Origin: 'https://example.com', 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }), { DB });
+  assert.deepEqual(await get(), { version: 0 });
+  const base = { day:'Mán', minutes:null, url:'' };
+  const legacy = Array.from({ length:7 }, () => ({ ...base, name:'Afgangar' }));
+  legacy[0] = { ...base, name:'Krónuréttur', url:'https://kronan.is/uppskriftir/profun' };
+  DB.prepare('INSERT INTO household VALUES (1, 1, ?, ?)').bind('[]', JSON.stringify(legacy)).run();
+
+  const recipe = { servings:2, ingredientGroups:[{ ingredients:['250 g Hakk','1 dl Mjólk'] }] };
+  const kronan = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://kronan.is/api/v3/mcp');
+    assert.equal(JSON.parse(options.body).params.arguments.slug, 'profun');
+    return new Response('event: message\ndata: ' + JSON.stringify({
+      id:1, result:{ structuredContent:{ recipe } },
+    }) + '\n\n', { headers:{ 'Content-Type':'text/event-stream' } });
+  });
+  const initial = await get();
+  assert.equal(initial.shopping, null);
+  assert.deepEqual(initial.meals, legacy);
+  initial.meals[1] = { ...base, name:'Annar réttur', ingredients:['0,5 kg hakk','3 dl mjólk','1 stk. laukur'] };
+  const approval = await put({ ...initial, shoppingAction:{ type:'approve' } });
+  assert.equal(approval.status, 200);
+  assert.equal(kronan.mock.callCount(), 1);
+  const approved = await get();
+  assert.equal(approved.shopping.missing.length, 0);
+  const beef = approved.shopping.items.find(item => item.unit === 'g');
+  assert.equal(beef.amount, 1000);
+  assert.equal(approved.shopping.items.find(item => item.unit === 'ml').amount, 500);
+
+  const toggled = await put({ ...approved, shoppingAction:{ type:'toggle', id:beef.id, done:true } });
+  assert.equal(toggled.status, 200);
+  assert.equal((await get()).shopping.items.find(item => item.id === beef.id).done, true);
+  assert.equal((await put({ ...approved, shoppingAction:{ type:'toggle', id:beef.id, done:false } })).status, 409);
+
+  const olderBrowser = await get();
+  olderBrowser.meals = olderBrowser.meals.map(({ ingredients, ...meal }) => meal);
+  assert.equal((await put(olderBrowser)).status, 200);
+  const current = await get();
+  assert.deepEqual(current.meals[0].ingredients, ['500 g Hakk','200 ml Mjólk']);
+  assert.ok(current.shopping.items.find(item => item.id === beef.id).done);
+
+  current.meals[1].ingredients = ['1 kg hakk'];
+  assert.equal((await put(current)).status, 200);
+  const edited = await get();
+  assert.equal(edited.shopping.items.find(item => item.id === beef.id).amount, 1000);
+  const updated = await (await put({ ...edited, shoppingAction:{ type:'approve' } })).json();
+  assert.equal(updated.shopping.items.find(item => item.id === beef.id).amount, 1500);
+  assert.equal(updated.shopping.items.find(item => item.id === beef.id).done, false);
+  assert.equal(kronan.mock.callCount(), 1);
+});
