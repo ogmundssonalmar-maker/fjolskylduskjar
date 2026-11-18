@@ -1,5 +1,6 @@
 import { EncryptJWT, base64url, jwtDecrypt } from 'jose';
 import { readApprovedShopping } from './household.js';
+import { validWeek } from './shopping.js';
 
 const graphOrigin = 'https://graph.microsoft.com';
 const microsoft = 'https://login.microsoftonline.com/common/oauth2/v2.0';
@@ -170,9 +171,9 @@ async function availableLists(token) {
   return lists.filter(list => list.isOwner && list.isShared).map(({ id, displayName }) => ({ id, name:displayName }));
 }
 
-async function exportItems(env, connection) {
+async function exportItems(env, connection, week) {
   if (!connection.list_id) throw new TodoError('Veldu sameiginlega listann í Microsoft To Do.', 409);
-  const shopping = await readApprovedShopping(env.DB);
+  const shopping = await readApprovedShopping(env.DB, week);
   if (!shopping) throw new TodoError('Samþykktu matseðilinn fyrst.', 409);
   const waiting = shopping.items.filter(item => !item.done);
   if (!waiting.length) return { added:0, updated:0, skipped:0, failed:0 };
@@ -261,7 +262,11 @@ export async function todo(request, env) {
       if (!saved.meta.changes) throw new TodoError('Listaval er þegar vistað. Tengdu reikninginn aftur til að skipta um lista.',409);
       return json({ list:list.name });
     }
-    if (pathname === '/api/todo/export' && request.method === 'POST') return json(await exportItems(env, connection));
+    if (pathname === '/api/todo/export' && request.method === 'POST') {
+      const input = await request.json().catch(() => ({}));
+      if (input?.week !== undefined && !validWeek(input.week)) throw new TodoError('Ógild vika.',400);
+      return json(await exportItems(env, connection, input?.week));
+    }
     return json({ error:'Slóð fannst ekki.' },404);
   } catch (error) {
     return error instanceof TodoError

@@ -34,16 +34,26 @@ export function menuSignature(meals) {
   return JSON.stringify(meals.map(({ name, ingredients = [] }) => [name, ...ingredients]));
 }
 
-export function buildShopping(meals, previous, now = new Date()) {
-  const monday = new Date(now);
+export function weekStart(date = new Date()) {
+  const monday = new Date(date);
   monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
-  const week = monday.toISOString().slice(0, 10);
+  return monday.toISOString().slice(0, 10);
+}
+
+export function validWeek(week) {
+  if (typeof week !== 'string' || !/^20\d{2}-\d{2}-\d{2}$/.test(week)) return false;
+  const date = new Date(week + 'T00:00:00Z');
+  return Number.isFinite(date.valueOf()) && weekStart(date) === week;
+}
+
+export function buildShopping(meals, previous, now = new Date()) {
+  const week = weekStart(now);
   const checked = new Map((previous?.week === week ? previous.items : []).map(item => [item.id, item]));
   const items = new Map();
   const missing = [];
 
   for (const meal of meals) {
-    if (!meal.ingredients?.length && !/^(?:afgang(?:ar|adagur)?|frjáls dagur)(?:\s*\/\s*afgangar)?$/iu.test(meal.name.trim())) {
+    if (!meal.ingredients?.length && !/^(?:óskráð|afgang(?:ar|adagur)?|frjáls dagur)(?:\s*\/\s*afgangar)?$/iu.test(meal.name.trim())) {
       missing.push(meal.name);
     }
     for (const line of meal.ingredients || []) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { household } from '../src/household.js';
+import { household, readApprovedShopping } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
 import worker from '../src/worker.js';
 
@@ -340,6 +340,53 @@ test('approval imports recipe ingredients and shares checked items while preserv
   assert.equal(kronan.mock.callCount(), 1);
 });
 
+test('weekly menus preserve the existing plan and track approval, checkmarks and revisions per week', async t => {
+  const DB = testD1(t);
+  const base = 'https://example.com';
+  const originalWeek = '2026-11-16';
+  const previousWeek = '2026-11-09';
+  const nextWeek = '2026-11-23';
+  const menuPath = week => '/api/household/menu?week=' + week;
+  const call = (path, data) => household(new Request(base + path, data && {
+    method:'PUT', headers:{ Origin:base, 'Content-Type':'application/json' }, body:JSON.stringify(data),
+  }), { DB });
+  const read = async week => (await call(menuPath(week))).json();
+  const write = (week, data) => call(menuPath(week), data);
+  const legacy = ['Mán','Þri','Mið','Fim','Fös','Lau','Sun'].map(day => ({ day, name:'Afgangar', minutes:null, url:'' }));
+  legacy[0] = { ...legacy[0], name:'Súpa', ingredients:['2 stk. laukur'] };
+
+  assert.equal((await call('/api/household', { meals:legacy, tasks:[], version:0 })).status, 200);
+  assert.equal((await call('/api/household', { tasksOnly:true, tasks:[{ name:'Verk', done:true }], version:1 })).status, 200);
+  assert.equal((await call(menuPath('2026-11-17'))).status, 400);
+  assert.equal((await worker.fetch(new Request(base + menuPath(originalWeek)), { DB })).status, 403);
+  assert.deepEqual((await read(originalWeek)).meals, legacy);
+  assert.deepEqual((await read(previousWeek)).meals, []);
+  assert.deepEqual((await read(nextWeek)).meals, []);
+
+  const future = legacy.map(meal => ({ day:meal.day, name:'Óskráð', minutes:null, url:'' }));
+  future[0] = { ...future[0], name:'Pasta', ingredients:['3 stk. laukur'] };
+  const [original, next] = await Promise.all([
+    write(originalWeek, { meals:legacy, version:0, shoppingAction:{ type:'approve' } }),
+    write(nextWeek, { meals:future, version:0, shoppingAction:{ type:'approve' } }),
+  ]);
+  assert.equal(original.status, 200);
+  assert.equal(next.status, 200);
+  const nextState = await next.json();
+  assert.equal(nextState.shopping.week, nextWeek);
+  assert.deepEqual(nextState.shopping.missing, []);
+  const [onion] = nextState.shopping.items;
+  assert.equal((await write(nextWeek, { ...nextState, shoppingAction:{ type:'toggle', id:onion.id, done:true } })).status, 200);
+  assert.equal((await write(nextWeek, { ...nextState })).status, 409);
+  const originalList = await readApprovedShopping(DB, originalWeek);
+  const nextList = await readApprovedShopping(DB, nextWeek);
+  assert.equal(originalList.items[0].amount, 2);
+  assert.equal(originalList.items[0].done, false);
+  assert.equal(nextList.items[0].amount, 3);
+  assert.equal(nextList.items[0].done, true);
+  assert.equal(await readApprovedShopping(DB, previousWeek), null);
+  assert.deepEqual((await read(nextWeek)).meals, future);
+});
+
 test('Microsoft To Do connects an owned shared list and exports shopping without duplicate tasks', async t => {
   const base = 'https://fjolskylduskjar.ogmundssonalmar.workers.dev';
   const DB = testD1(t);
@@ -405,4 +452,11 @@ test('Microsoft To Do connects an owned shared list and exports shopping without
   assert.deepEqual(second,{added:0,updated:0,skipped:2,failed:0});
   assert.equal(batches.length,1);
   assert.deepEqual(microsoftTasks[0],{id:'manual-1',title:'Salt',status:'notStarted',body:{content:'Handskráð'}});
+  const nextWeek = '2026-11-23';
+  const weeklyMenu = '/api/household/menu?week=' + nextWeek;
+  meals[0] = {...meals[0], name:'Salat', ingredients:['2 stk. gulrót']};
+  assert.equal((await call(weeklyMenu,'PUT',{version:0,meals,shoppingAction:{type:'approve'}},cookie)).status,200);
+  const followingWeek = await (await call('/api/todo/export','POST',{week:nextWeek},cookie)).json();
+  assert.deepEqual(followingWeek,{added:1,updated:0,skipped:0,failed:0});
+  assert.equal(batches[1][0].body.title,'gulrót · 2 stk');
 });
