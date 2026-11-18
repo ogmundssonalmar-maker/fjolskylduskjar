@@ -10,6 +10,8 @@ Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni.
 
 ## Cloudflare Pages
 
+Fyrir staðbundna Pages-keyrslu notið `wrangler pages dev --config wrangler.pages.toml`. Sjálfgefna `wrangler.toml` er fyrir Workers.
+
 1. GitHub-geymslan má vera opin á meðan unnið er með kóðann. Eldri v2 gögn eru í núverandi Git-sögu. Geymið ný fjölskyldugögn í vernduðum gagnagrunni og leyndarmál í Cloudflare-stillingum.
 2. Tengið geymsluna við Cloudflare Pages með `main` sem production-grein, `npm run build` sem byggingarskipun og `dist` sem úttaksmöppu. Veljið Node.js 22 eða nýrra. Haldið sjálfvirkum preview-útgáfum óvirkum þar til Access-reglur fyrir þær eru tilbúnar.
 3. Setjið upp Cloudflare Access fyrir production og öll notuð sérlén. Virkið Access fyrir preview í Pages og yfirfarið að bæði greinavísar og útgáfuslóðir falli undir regluna. Leyfið aðeins netföng foreldranna. Ef Access nær ekki yfir tiltekið hýsingarheiti þarf Functions-vörnin áfram að skila 403 þar.
@@ -31,9 +33,9 @@ Hýsingarútgáfan hefur auða dagskrá, ferðir, leikskóla og upphafsverkefni.
 
 ## Samstilling á Worker-útgáfunni
 
-1. Stofnið D1 og bætið `[[d1_databases]]` með `binding = "DB"`, `database_name` og `database_id` við `wrangler.worker.toml` eða tengið gagnagrunninn í Cloudflare. Keyrið `wrangler d1 migrations apply DB --remote --config wrangler.worker.toml` þegar D1-tengingin liggur fyrir.
+1. Stofnið D1 og bætið `[[d1_databases]]` með `binding = "DB"`, `database_name` og `database_id` við `wrangler.toml` eða tengið gagnagrunninn í Cloudflare. Keyrið `wrangler d1 migrations apply DB --remote` þegar D1-tengingin liggur fyrir.
 2. Stillið Cloudflare Access fyrir Worker-slóðina í **Settings → Domains & Routes**, með heimiluðum netföngum foreldra. Setjið `ACCESS_TEAM_DOMAIN`, `ACCESS_AUDIENCES` og `ACCESS_PARENT_EMAILS` fyrir Worker. Staðfestið að óinnskráðar beiðnir á `/api/household` og `/api/calendar` fái synjun. Sama API er í boði sem Pages Functions með D1-bindingu `DB`.
-3. Byggið með `npm ci && npm run build` og birtið með `wrangler deploy --config wrangler.worker.toml`. Ef birting fer fram í gegnum Git, stillið byggingar- og birtingarskipanirnar þar og veljið greinina með Worker-kóðanum.
+3. Byggið með `npm ci && npm run build` og birtið með `wrangler deploy`. Ef birting fer fram í gegnum Git, stillið byggingar- og birtingarskipanirnar þar og veljið greinina með Worker-kóðanum sem production-grein. Cloudflare keyrir `wrangler preview` fyrir forskoðunargreinar og `wrangler deploy` fyrir aðalútgáfu.
 4. Veljið hvaða tæki á að leggja til upphafsgögnin. Fyrsta vistanlega breytingin á því tæki fyllir tóman gagnagrunn með verkefnum og matseðli tækisins. Staðbundin gögn geymast áfram í upprunalega vafranum. Skjárinn athugar breytingar á 15 sekúndna fresti.
 
 ### Google Calendar
