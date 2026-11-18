@@ -112,12 +112,15 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
   <form id="eventForm">
     <h2 id="eventDialogHeading">Bæta við viðburði</h2>
     <label>Heiti <input name="title" required maxlength="160"></label>
-    <label>Dagsetning <input name="date" type="date" required></label>
+    <div class="event-time-fields">
+      <label>Upphafsdagur <input name="date" type="date" required></label>
+      <label>Lokadagur <input name="endDate" type="date"></label>
+    </div>
     <div class="event-time-fields">
       <label>Frá <input name="startTime" type="time"></label>
       <label>Til <input name="endTime" type="time"></label>
     </div>
-    <p class="help">Skildu tímana eftir auða fyrir heilsdagsviðburð.</p>
+    <p class="help">Skildu lokadaginn eftir auðan ef viðburðurinn er einn dagur. Skildu tímana eftir auða fyrir heilsdagsviðburð.</p>
     <label>Fyrir <select name="owner">
       <option value="family">Fjölskylduna</option><option value="almar">Almar</option>
       <option value="oddny">Oddnýju</option><option value="children">Börnin</option>
@@ -207,8 +210,13 @@ function eventLink(event) {
   return url.origin === 'https://calendar.google.com' ||
     (url.origin === 'https://www.google.com' && url.pathname.startsWith('/calendar/')) ? url.href : '';
 }
-function renderEvent(event, showTime = false) {
-  const when = showTime ? event.time || 'Allur dagurinn' : formatDate(event.start, { day:'numeric', month:'short' });
+function eventTimeOnDay(event, day) {
+  if (day === event.start && event.time) return event.start === event.end ? event.time : 'Frá ' + event.time;
+  if (day === event.end && event.endTime) return 'Til ' + (event.endTime === '00:00' ? '24:00' : event.endTime);
+  return '';
+}
+function renderEvent(event, showTime = false, day = today) {
+  const when = showTime ? eventTimeOnDay(event, day) || 'Allur dagurinn' : formatDate(event.start, { day:'numeric', month:'short' });
   const owner = ownerFor(event);
   const link = eventLink(event);
   const title = link
@@ -219,12 +227,13 @@ function renderEvent(event, showTime = false) {
       ${xss(ownerLabels[owner] || typeLabel[event.type] || 'Viðburður')}</span></div>
     <div class="agenda-note">${xss(event.note || '')}</div></div></div>`;
 }
-function renderMonthEvent(event) {
+function renderMonthEvent(event, day) {
   const owner = ownerFor(event);
   const link = eventLink(event);
   const classes = 'month-event dayev ' + xss(event.type) + (owner ? ' owner-' + owner : '');
   const label = xss(event.title + (owner ? ', ' + ownerLabels[owner] : ''));
-  const content = (event.time ? xss(event.time) + ' ' : '') + xss(event.title);
+  const time = eventTimeOnDay(event, day);
+  const content = (time ? xss(time) + ' ' : '') + xss(event.title);
   return link
     ? `<a class="${classes}" href="${xss(link)}" target="_blank" rel="noopener noreferrer"
         title="${label}" aria-label="${label} · Opna í Google Calendar">${content}</a>`
@@ -298,6 +307,13 @@ const eventWriteStatus = document.getElementById('eventWriteStatus');
 const eventDialogStatus = document.getElementById('eventDialogStatus');
 const eventSubmit = document.getElementById('eventSubmit');
 let eventDraftId;
+function updateEventDateConstraints() {
+  const { date, endDate, startTime, endTime } = eventForm.elements;
+  endDate.min = date.value;
+  startTime.required = Boolean(endTime.value);
+  endTime.required = Boolean(startTime.value && endDate.value > date.value);
+}
+eventForm.addEventListener('input', updateEventDateConstraints);
 function setEventWriteStatus(text) {
   eventWriteStatus.textContent = text;
   eventWriteStatus.hidden = !text;
@@ -315,6 +331,7 @@ document.getElementById('openEventDialog').addEventListener('click', () => {
   setEventWriteStatus('');
   eventForm.reset();
   eventForm.elements.date.value = selectedDay;
+  updateEventDateConstraints();
   eventDraftId = crypto.randomUUID().replaceAll('-', '');
   eventDialogStatus.textContent = '';
   eventDialog.showModal();
@@ -545,7 +562,7 @@ function renderMonth() {
         data-date="${day}" onclick="selectMonthDay('${day}')">
         <span class="month-day-number">${Number(day.slice(-2))}</span>
       </button>
-      ${events.slice(0, 3).map(renderMonthEvent).join('')}
+      ${events.slice(0, 3).map(event => renderMonthEvent(event, day)).join('')}
       ${events.length > 3 ? `<span class="month-more">+${events.length - 3}</span>` : ''}
     </div>`;
   }).join('');
@@ -554,7 +571,7 @@ function renderMonth() {
     weekday: 'long', day: 'numeric', month: 'long',
   });
   document.getElementById('selectedDayEvents').innerHTML = eventsOnMonthDay(selectedDay)
-    .map(event => renderEvent(event, true)).join('') || '<p class="empty">Engir viðburðir skráðir.</p>';
+    .map(event => renderEvent(event, true, selectedDay)).join('') || '<p class="empty">Engir viðburðir skráðir.</p>';
 }
 
 async function refreshMonth() {

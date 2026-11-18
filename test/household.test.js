@@ -173,3 +173,39 @@ test('calendar links and household-authorized writes use only the configured fam
   assert.deepEqual(calendar.events.map(({ owner, htmlLink }) => [owner, htmlLink]),
     [['oddny', googleLink], ['almar', '']]);
 });
+
+test('multi-day events include the last date and support overnight timed events', async t => {
+  const { addCalendarEvent } = await import('../src/calendar.js');
+  const env = {
+    GOOGLE_CALENDAR_WRITES_ENABLED: 'true',
+    GOOGLE_CALENDAR_IDS: 'family-calendar',
+    GOOGLE_CLIENT_ID: 'client',
+    GOOGLE_CLIENT_SECRET: 'secret',
+    GOOGLE_REFRESH_TOKEN: 'refresh',
+  };
+  const draft = { id: '12345678123412341234123456789abc', title: 'Ferð',
+    date: '2026-12-30', endDate: '2027-01-02', owner: 'family' };
+  let saved;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).includes('oauth2.googleapis.com')) return Response.json({ access_token: 'token' });
+    saved = JSON.parse(options.body);
+    return Response.json({});
+  });
+
+  await addCalendarEvent(env, draft);
+  assert.deepEqual(saved.start, { date: '2026-12-30' });
+  assert.deepEqual(saved.end, { date: '2027-01-03' });
+
+  await addCalendarEvent(env, { ...draft, startTime: '23:00', endTime: '10:00' });
+  assert.equal(saved.start.dateTime, '2026-12-30T23:00:00Z');
+  assert.equal(saved.end.dateTime, '2027-01-02T10:00:00Z');
+
+  for (const invalid of [
+    { ...draft, endDate: '2026-12-29' },
+    { ...draft, endDate: '2027-02-30' },
+    { ...draft, startTime: '23:00' },
+    { ...draft, endDate: '', startTime: '23:00', endTime: '10:00' },
+  ]) {
+    await assert.rejects(addCalendarEvent(env, invalid), { code: 'invalid_calendar_event' });
+  }
+});

@@ -88,11 +88,12 @@ export async function readCalendar(env, now = new Date(), month = null) {
         // Google end values are exclusive, including events that end at midnight.
         const end = new Date(Date.parse(item.end.date || item.end.dateTime) - 1).toISOString().slice(0, 10);
         const time = item.start.dateTime ? new Date(item.start.dateTime).toISOString().slice(11, 16) : undefined;
+        const endTime = item.end.dateTime ? new Date(item.end.dateTime).toISOString().slice(11, 16) : undefined;
         const occurrence = item.originalStartTime || item.start;
         const key = item.iCalUID
           ? JSON.stringify([item.iCalUID, occurrence.date || new Date(occurrence.dateTime).toISOString()])
           : id + ':' + item.id;
-        events.set(key, { start, end: end < start ? start : end, time,
+        events.set(key, { start, end: end < start ? start : end, time, endTime,
           title: item.summary || 'Viðburður', type: 'dagatal', note: '',
           owner: eventOwner(item), htmlLink: googleEventLink(item.htmlLink) });
       }
@@ -104,26 +105,37 @@ export async function readCalendar(env, now = new Date(), month = null) {
     ...(writeCalendarId(env) ? { canCreateEvents: true } : {}) };
 }
 
+function dateAtMidnight(date) {
+  if (typeof date !== 'string' || !/^[2-9]\d{3}-\d{2}-\d{2}$/.test(date)) return NaN;
+  const time = Date.parse(date + 'T00:00:00Z');
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? time : NaN;
+}
+
 function newCalendarEvent(input) {
   if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 160 ||
-      typeof input.date !== 'string' || !/^[2-9]\d{3}-\d{2}-\d{2}$/.test(input.date) ||
       typeof input.id !== 'string' || !/^[0-9a-f]{32}$/.test(input.id) ||
-      !Object.hasOwn(owners, input.owner)) return null;
-  const midnight = Date.parse(input.date + 'T00:00:00Z');
-  if (!Number.isFinite(midnight) || new Date(midnight).toISOString().slice(0, 10) !== input.date) return null;
+      typeof input.owner !== 'string' || !Object.hasOwn(owners, input.owner)) return null;
+
+  const endDate = input.endDate || input.date;
+  const startMidnight = dateAtMidnight(input.date);
+  const endMidnight = dateAtMidnight(endDate);
+  if (!Number.isFinite(startMidnight) || !Number.isFinite(endMidnight) || endMidnight < startMidnight) return null;
 
   const validTime = time => typeof time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
-  const localTime = time => ({ dateTime: input.date + 'T' + time + ':00Z', timeZone: 'Atlantic/Reykjavik' });
+  const localTime = (date, time) => ({ dateTime: date + 'T' + time + ':00Z', timeZone: 'Atlantic/Reykjavik' });
   let start = { date: input.date };
-  let end = { date: new Date(midnight + 86400000).toISOString().slice(0, 10) };
+  // The form includes the last day. Google stores the first day after the event.
+  let end = { date: new Date(endMidnight + 86400000).toISOString().slice(0, 10) };
   if (input.startTime || input.endTime) {
     if (!validTime(input.startTime) ||
-        (input.endTime && (!validTime(input.endTime) || input.endTime <= input.startTime))) return null;
-    start = localTime(input.startTime);
-    end = input.endTime ? localTime(input.endTime) : {
+        (input.endTime && !validTime(input.endTime)) ||
+        (endDate !== input.date && !input.endTime)) return null;
+    start = localTime(input.date, input.startTime);
+    end = input.endTime ? localTime(endDate, input.endTime) : {
       dateTime: new Date(Date.parse(start.dateTime) + 3600000).toISOString(),
       timeZone: 'Atlantic/Reykjavik',
     };
+    if (Date.parse(end.dateTime) <= Date.parse(start.dateTime)) return null;
   }
   return {
     id: input.id, summary: input.title.trim(), start, end, colorId: owners[input.owner],
