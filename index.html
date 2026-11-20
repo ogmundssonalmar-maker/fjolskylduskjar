@@ -70,12 +70,17 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
  .month-day-number{font-size:12px;min-width:22px;height:22px}
  .month-more{font-size:9px}
 }
-#mealDialog{border:1px solid var(--border);border-radius:15px;padding:22px;width:min(480px,calc(100% - 32px));color:var(--ink)}
-#mealDialog::backdrop{background:#14261b80}
-#mealDialog h2{margin:0 0 14px}
-#mealForm label{display:block;font-weight:650;margin:9px 0}
-#mealForm input,#mealForm textarea{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
-#mealForm textarea{resize:vertical}
+.menu-dialog{border:1px solid var(--border);border-radius:15px;padding:22px;width:min(480px,calc(100% - 32px));color:var(--ink)}
+.menu-dialog::backdrop{background:#14261b80}
+.menu-dialog h2{margin:0 0 14px}
+.menu-dialog label{display:block;font-weight:650;margin:9px 0}
+.menu-dialog input,.menu-dialog textarea,.menu-dialog select{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
+.menu-dialog textarea{resize:vertical}
+.menu-card-actions,.shopping-item-actions{display:flex;flex-wrap:wrap;gap:5px}
+.shopping-item-actions .outline{padding:7px 8px}
+.menu-recipe summary{cursor:pointer;font-size:12px;color:var(--forest)}
+.menu-recipe p{white-space:pre-line;overflow-wrap:anywhere;margin:5px 0}
+#menuStage{margin:5px 0 9px}
 #shoppingList .check{cursor:pointer}
 #shoppingList .check b{font-weight:650}
 #shoppingList .check small{color:var(--muted)}
@@ -142,7 +147,11 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
   </div>
   <div class="two">
     <article class="card">
-      <button class="outline" type="button" id="copyMenuWeek">Afrita úr fyrri viku</button>
+      <p class="help" id="menuStage" role="status"></p>
+      <div class="menu-card-actions">
+        <button class="outline" type="button" id="copyMenuWeek">Afrita úr fyrri viku</button>
+        <button class="outline" type="button" id="openMenuImport">Flytja inn JSON</button>
+      </div>
       <p class="help" id="copyMenuMessage" role="status" hidden></p>
       <div id="menuAll"></div>
     </article>
@@ -159,6 +168,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
           <button type="submit">Bæta við</button>
         </form>
         <div id="shoppingList"></div>
+        <p class="help" id="shoppingTotal" hidden></p>
         <details id="excludedShopping" hidden>
           <summary></summary>
           <div id="excludedShoppingList"></div>
@@ -243,18 +253,51 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     </div>
   </form>
 </dialog>
-<dialog id="mealDialog" aria-labelledby="mealDialogHeading">
+<dialog class="menu-dialog" id="mealDialog" aria-labelledby="mealDialogHeading">
   <form id="mealForm">
     <h2 id="mealDialogHeading">Breyta máltíð</h2>
     <label>Heiti <input name="mealName" required maxlength="180"></label>
     <label>Uppskriftaslóð <input name="url" type="url" maxlength="1024"></label>
+    <label>Matreiðslutími í mínútum <input name="minutes" type="number" min="0" max="1440"></label>
     <label>Hráefni fyrir fjölskylduna <textarea name="ingredients" rows="6" aria-describedby="ingredientsHelp"
       placeholder="500 g hakk&#10;1 stk. laukur&#10;2 dl mjólk"></textarea></label>
     <p class="help" id="ingredientsHelp">Eitt hráefni í hverri línu. Ef listinn er auður eru hráefni úr Krónuuppskrift sótt við samþykki.</p>
+    <details id="recipeFields">
+      <summary>Uppskrift og skammtar</summary>
+      <label>Heiti uppskriftar <input name="recipeTitle" maxlength="180"></label>
+      <label>Fjöldi skammta <input name="servings" type="number" min="1" max="100"></label>
+      <label>Leiðbeiningar <textarea name="instructions" rows="3" maxlength="2000"></textarea></label>
+    </details>
     <p class="help" id="mealDialogStatus" role="status"></p>
     <div class="month-controls">
       <button class="outline" type="button" id="closeMealDialog">Hætta við</button>
       <button class="solid" type="submit" id="mealSubmit">Vista máltíð</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="menu-dialog" id="menuImportDialog" aria-labelledby="menuImportHeading">
+  <form id="menuImportForm">
+    <h2 id="menuImportHeading">Flytja inn JSON</h2>
+    <p class="help" id="menuImportHelp"></p>
+    <label>JSON úr ChatGPT <textarea name="menuJson" rows="7" required maxlength="50000" spellcheck="false" aria-describedby="menuImportHelp"></textarea></label>
+    <p class="help" id="menuImportStatus" role="status"></p>
+    <div class="month-controls">
+      <button class="outline" type="button" id="closeMenuImport">Hætta við</button>
+      <button class="solid" type="submit">Vista sem drög</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="menu-dialog" id="shoppingPriceDialog" aria-labelledby="shoppingPriceHeading">
+  <form id="shoppingPriceForm">
+    <h2 id="shoppingPriceHeading">Verð</h2>
+    <p class="help" id="shoppingPriceItem"></p>
+    <label>Verð fyrir skráð magn (kr.) <input name="amount" type="number" min="0" max="10000000" step="1"></label>
+    <label>Staða verðs <select name="priceStatus"><option value="estimated">Áætlað</option><option value="confirmed">Staðfest</option></select></label>
+    <p class="help">Skildu verðreitinn eftir auðan til að taka verðið út.</p>
+    <p class="help" id="shoppingPriceStatus" role="status"></p>
+    <div class="month-controls">
+      <button class="outline" type="button" id="closeShoppingPrice">Hætta við</button>
+      <button class="solid" type="submit">Vista verð</button>
     </div>
   </form>
 </dialog>
@@ -330,14 +373,14 @@ function localWeekMeals(week) {
 let menuWeek = mondayFor(today);
 let followsCurrentWeek = true;
 let menuVersion = null;
+let menuStage = 'draft';
 let menuSaving = false;
 let menuRequestId = 0;
 let homeMenus = {};
 let meals = localWeekMeals(menuWeek);
 function mealForDay(day) {
   const week = mondayFor(day);
-  const plan = week === menuWeek ? meals : homeMenus[week] || localWeekMeals(week);
-  return plan[weekdayIndex(day)];
+  return homeMenus[week]?.[weekdayIndex(day)] || { name:emptyMealName };
 }
 let shopping=null;
 let tasks=load('family-tasks-v2',[]);
@@ -536,6 +579,7 @@ async function refreshShared() {
       version = null;
       menuRequestId++;
       menuVersion = null;
+      menuStage = 'draft';
       homeMenus = {};
       meals = localWeekMeals(menuWeek);
       shopping = null;
@@ -591,7 +635,8 @@ function selectMenuWeek(week) {
   menuWeek = week;
   followsCurrentWeek = week === mondayFor(today);
   menuVersion = null;
-  meals = homeMenus[week] || localWeekMeals(week);
+  menuStage = 'draft';
+  meals = localWeekMeals(week);
   shopping = null;
   copyMenuMessage.hidden = true;
   shoppingAdd.reset();
@@ -649,18 +694,18 @@ copyMenuWeek.addEventListener('click', async () => {
 });
 
 async function refreshWeekMenu({ whileEditing = false } = {}) {
-  if (version === null || menuSaving || (mealDialog.open && !whileEditing)) return;
+  if (version === null || menuSaving || (menuDialogIsOpen() && !whileEditing)) return;
   const requestId = ++menuRequestId;
   try {
     const response = await fetch(menuUrl(menuWeek), { cache:'no-store' });
     if (!response.ok) throw new Error();
     const state = await response.json();
-    if (requestId !== menuRequestId || menuSaving || version === null || (mealDialog.open && !whileEditing)) return;
-    homeMenus = Object.fromEntries(Object.entries(state.home).map(([week, plan]) =>
-      [week, plan.length === 7 ? plan : localWeekMeals(week)]));
+    if (requestId !== menuRequestId || menuSaving || version === null || (menuDialogIsOpen() && !whileEditing)) return;
+    homeMenus = state.home;
     if (state.version !== menuVersion) {
       menuVersion = state.version;
-      meals = homeMenus[menuWeek];
+      menuStage = state.status;
+      meals = state.meals.length === 7 ? state.meals : localWeekMeals(menuWeek);
       shopping = state.shopping;
       renderMeals();
       renderShopping();
@@ -742,14 +787,15 @@ async function saveChange(change) {
   return true;
 }
 
-async function saveMenuChange(change) {
+async function saveMenuChange(change, { importData, reportError = () => {} } = {}) {
   if (menuSaving || (version !== null && menuVersion === null)) return false;
+  const importing = importData !== undefined;
   const draft = structuredClone({ meals, version:menuVersion });
-  change(draft);
+  change?.(draft);
   if (version === null) {
+    if (importing) return false;
     meals = draft.meals;
     store(menuStorageKey(menuWeek), meals);
-    homeMenus[menuWeek] = meals;
     renderMeals();
     renderShopping();
     renderToday();
@@ -761,21 +807,29 @@ async function saveMenuChange(change) {
   renderShopping();
   try {
     const response = await fetch(menuUrl(menuWeek), {
-      method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(draft),
+      method:importing ? 'POST' : 'PUT', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify(importing ? { version:draft.version, data:importData,
+        ...(draft.version === 0 ? { meals:draft.meals } : {}) } : draft),
     });
     if (response.status === 409) {
       menuVersion = null;
+      reportError('Breyting var vistuð úr öðru tæki. Yfirfarðu gögnin og reyndu aftur.');
       return false;
     }
-    if (!response.ok) return false;
-    const saved = await response.json();
+    const saved = await response.json().catch(() => null);
+    if (!response.ok || !saved) {
+      reportError(saved?.error || 'Vistun mistókst. Reyndu aftur.');
+      return false;
+    }
     menuVersion = saved.version;
+    menuStage = saved.status;
     meals = saved.meals;
     shopping = saved.shopping;
-    homeMenus[menuWeek] = meals;
+    homeMenus[menuWeek] = saved.activeMeals;
     syncStatus.textContent = 'Verkefni og matseðill samstillt milli tækja.';
     return true;
   } catch {
+    reportError('Vistun mistókst. Reyndu aftur.');
     return false;
   } finally {
     menuSaving = false;
@@ -811,22 +865,34 @@ const mealDialog = document.getElementById('mealDialog');
 const mealForm = document.getElementById('mealForm');
 const mealDialogStatus = document.getElementById('mealDialogStatus');
 const mealSubmit = document.getElementById('mealSubmit');
+const menuImportDialog = document.getElementById('menuImportDialog');
+const shoppingPriceDialog = document.getElementById('shoppingPriceDialog');
 let mealIndex;
+
+function menuDialogIsOpen() {
+  return mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
+}
 
 function editMeal(index) {
   if (menuSaving || (version !== null && menuVersion === null)) return;
   mealIndex = index;
   const meal = meals[index];
-  mealForm.elements.mealName.value = meal.name === emptyMealName ? '' : meal.name;
-  mealForm.elements.url.value = meal.url;
-  mealForm.elements.ingredients.value = (meal.ingredients || []).join('\n');
+  const fields = mealForm.elements;
+  fields.mealName.value = meal.name === emptyMealName ? '' : meal.name;
+  fields.url.value = meal.url;
+  fields.minutes.value = meal.minutes ?? '';
+  fields.ingredients.value = (meal.ingredients || []).join('\n');
+  fields.recipeTitle.value = meal.recipe?.title || '';
+  fields.servings.value = meal.recipe?.servings ?? '';
+  fields.instructions.value = meal.recipe?.instructions || '';
+  document.getElementById('recipeFields').open = Boolean(meal.recipe);
   mealDialogStatus.textContent = '';
   mealDialog.showModal();
 }
 document.getElementById('closeMealDialog').addEventListener('click', () => mealDialog.close());
 mealForm.addEventListener('submit', async event => {
   event.preventDefault();
-  const { mealName, url, ingredients } = Object.fromEntries(new FormData(mealForm));
+  const { mealName, url, ingredients, minutes, recipeTitle, servings, instructions } = Object.fromEntries(new FormData(mealForm));
   const lines = ingredients.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const link = recipeUrl(url.trim());
   if (!mealName.trim() || (url.trim() && !link) || lines.length > 48 || lines.some(line => line.length > 180)) {
@@ -837,8 +903,13 @@ mealForm.addEventListener('submit', async event => {
   try {
     const saved = await saveMenuChange(draft => {
       const previous = draft.meals[mealIndex];
-      draft.meals[mealIndex] = { ...previous, name: mealName.trim(), url: link, ingredients: lines,
-        minutes: previous.name === mealName.trim() ? previous.minutes : null };
+      const name = mealName.trim();
+      const recipe = recipeTitle.trim() || servings || instructions.trim() ? {
+        title:recipeTitle.trim() || name, ...(servings ? { servings:Number(servings) } : {}),
+        ...(instructions.trim() ? { instructions:instructions.trim() } : {}),
+      } : undefined;
+      draft.meals[mealIndex] = { day:previous.day, name, url:link, ingredients:lines,
+        minutes:minutes === '' ? null : Number(minutes), ...(recipe ? { recipe } : {}) };
     });
     if (saved) mealDialog.close();
     else mealDialogStatus.textContent = 'Breytingin vistaðist ekki. Reyndu aftur.';
@@ -847,6 +918,47 @@ mealForm.addEventListener('submit', async event => {
   }
 });
 
+const menuImportOpen = document.getElementById('openMenuImport');
+const menuImportForm = document.getElementById('menuImportForm');
+const menuImportStatus = document.getElementById('menuImportStatus');
+menuImportOpen.addEventListener('click', () => {
+  if (version === null) return syncUnlock.click();
+  menuImportForm.reset();
+  menuImportStatus.textContent = '';
+  document.getElementById('menuImportHelp').textContent = `Valin vika byrjar ${menuWeek}. Dagarnir í JSON verða uppfærðir í drögunum.`;
+  menuImportForm.elements.menuJson.placeholder = JSON.stringify({ week:menuWeek,
+    meals:[{ date:menuWeek, name:'Tómatsúpa', ingredients:['500 g tómatar'] }] }, null, 2);
+  menuImportDialog.showModal();
+});
+document.getElementById('closeMenuImport').addEventListener('click', () => menuImportDialog.close());
+menuImportForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const text = menuImportForm.elements.menuJson.value.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1');
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    menuImportStatus.textContent = 'Ekki tókst að lesa JSON. Límdu inn JSON-hlutinn úr ChatGPT.';
+    return;
+  }
+  if (data?.week !== menuWeek) {
+    menuImportStatus.textContent = `JSON þarf að vera fyrir vikuna sem byrjar ${menuWeek}.`;
+    return;
+  }
+  const submit = event.submitter;
+  submit.disabled = true;
+  menuImportStatus.textContent = 'Vista drög …';
+  const saved = await saveMenuChange(null, { importData:data, reportError:message => { menuImportStatus.textContent = message; } });
+  submit.disabled = false;
+  if (saved) {
+    menuImportDialog.close();
+    setShoppingMessage('Matseðill fluttur inn sem drög. Yfirfarðu hann og veldu Samþykkja matseðil.');
+  } else if (menuImportStatus.textContent === 'Vista drög …') {
+    menuImportStatus.textContent = 'Bíddu eftir samstillingu og reyndu aftur.';
+  }
+});
+
+const menuStageLabel = document.getElementById('menuStage');
 function renderMeals() {
   const isCurrentWeek = menuWeek === mondayFor(today);
   const range = menuWeekLabel(menuWeek);
@@ -855,6 +967,10 @@ function renderMeals() {
   currentMenuWeek.disabled = menuSaving || isCurrentWeek;
   nextMenuWeek.disabled = menuSaving;
   const editingDisabled = menuSaving || (version !== null && menuVersion === null);
+  menuImportOpen.disabled = editingDisabled;
+  menuStageLabel.textContent = menuStage === 'active' ? 'Virkur matseðill'
+    : menuStage === 'active_with_draft' ? 'Drög að breytingum · fyrri útgáfa er virk'
+      : 'Drög · bíða samþykkis';
   copyMenuWeek.disabled = copyingMenu || editingDisabled;
   copyMenuWeek.hidden = meals.every(meal => meal.name !== emptyMealName);
   document.getElementById('menuAll').innerHTML = meals.map((meal, index) => {
@@ -863,12 +979,14 @@ function renderMeals() {
     const detail = [
       meal.minutes ? meal.minutes + ' mín.' : '',
       meal.ingredients?.length ? meal.ingredients.length + ' hráefni' : '',
+      meal.recipe?.servings ? meal.recipe.servings + ' skammtar' : '',
     ].filter(Boolean).join(' · ');
     const dayKey = offsetDay(menuWeek, index);
     const [,month,day] = dayKey.split('-').map(Number);
     const date = `${day}.${month}.`;
     return `<div class="menu-row"><span style="font-size:12px;font-weight:800;color:var(--muted)">${xss(meal.day)} <small>${xss(date)}</small></span>
-      <div><strong>${title}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}</div>
+      <div><strong>${title}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}
+        ${meal.recipe?.instructions ? `<details class="menu-recipe"><summary>${xss(meal.recipe.title)}</summary><p>${xss(meal.recipe.instructions)}</p></details>` : ''}</div>
       <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${meal.name === emptyMealName ? 'Skrá' : 'Breyta'}</button>
       <div class="menu-events" data-menu-day="${dayKey}"></div></div>`;
   }).join('');
@@ -888,9 +1006,11 @@ const shoppingMessage = document.getElementById('shoppingMessage');
 const shoppingReview = document.getElementById('shoppingReview');
 const shoppingAdd = document.getElementById('shoppingAdd');
 const shoppingList = document.getElementById('shoppingList');
+const shoppingTotal = document.getElementById('shoppingTotal');
 const excludedShopping = document.getElementById('excludedShopping');
 const excludedShoppingList = document.getElementById('excludedShoppingList');
 const shoppingNumber = new Intl.NumberFormat('is-IS', { maximumFractionDigits:3 });
+const isk = amount => shoppingNumber.format(amount) + ' kr.';
 
 function setShoppingMessage(message) {
   shoppingMessage.textContent = message;
@@ -898,21 +1018,26 @@ function setShoppingMessage(message) {
 }
 function shoppingRow(item, disabled) {
   const quantity = item.amount === null ? '' : shoppingNumber.format(item.amount) + ' ' + item.unit;
-  const name = `<span><b>${xss(item.name)}</b>${quantity ? ` <small>· ${xss(quantity)}</small>` : ''}</span>`;
+  const price = item.price ? `${isk(item.price.amount)} · ${item.price.status === 'confirmed' ? 'staðfest' : 'áætlað'}` : '';
+  const name = `<span><b>${xss(item.name)}</b>${quantity ? ` <small>· ${xss(quantity)}</small>` : ''}
+    ${price ? `<br><small>${xss(price)}</small>` : ''}</span>`;
   const itemId = xss(item.id);
   const control = disabled ? 'disabled' : '';
   return `<div class="shopping-row">
     ${item.excluded ? `<div class="check">${name}</div>` : `<label class="check ${item.done ? 'done' : ''}">
       <input type="checkbox" data-shopping-id="${itemId}" ${item.done ? 'checked' : ''} ${control}>
       ${name}</label>`}
-    <button type="button" class="outline" data-exclude-id="${itemId}" data-exclude="${!item.excluded}" ${control}
-      aria-label="${item.excluded ? 'Setja aftur á lista' : 'Taka af lista'} · ${xss(item.name)}">${item.excluded ? 'Setja aftur' : 'Taka af lista'}</button>
+    <div class="shopping-item-actions">
+      ${item.excluded ? '' : `<button type="button" class="outline" data-price-id="${itemId}" ${control}
+        aria-label="Verð · ${xss(item.name)}">Verð</button>`}
+      <button type="button" class="outline" data-exclude-id="${itemId}" data-exclude="${!item.excluded}" ${control}
+        aria-label="${item.excluded ? 'Setja aftur á lista' : 'Taka af lista'} · ${xss(item.name)}">${item.excluded ? 'Setja aftur' : 'Taka af lista'}</button>
+    </div>
     </div>`;
 }
 
 function renderShopping() {
   renderTodo();
-  const menu = JSON.stringify(meals.map(({ name, ingredients = [] }) => [name, ...ingredients]));
   menuApprove.textContent = shopping ? 'Samþykkja og uppfæra lista' : 'Samþykkja matseðil';
   const disabled = menuSaving || sendingTodo || (version !== null && menuVersion === null);
   menuApprove.disabled = disabled || meals.every(meal => meal.name === emptyMealName);
@@ -924,12 +1049,19 @@ function renderShopping() {
     return;
   }
 
-  shoppingStatus.textContent = shopping.menu === menu
-    ? 'Samþykktur matseðill'
-    : 'Matseðillinn hefur breyst. Samþykktu hann aftur til að uppfæra innkaupalistann.';
+  shoppingStatus.textContent = menuStage === 'active_with_draft'
+    ? 'Listinn miðast við virka matseðilinn. Samþykktu drögin til að uppfæra hann.'
+    : 'Innkaupalisti fyrir virkan matseðil';
   for (const element of shoppingAdd.elements) element.disabled = disabled;
   const listed = shopping.items.filter(item => !item.excluded).sort((a, b) => Number(a.done) - Number(b.done));
   shoppingList.innerHTML = listed.map(item => shoppingRow(item, disabled)).join('') || '<p class="empty">Engar vörur á listanum.</p>';
+  const priced = listed.filter(item => item.price);
+  const cost = status => priced.filter(item => item.price.status === status).reduce((total, item) => total + item.price.amount, 0);
+  const missing = listed.length - priced.length;
+  const totals = [`${isk(cost('confirmed'))} staðfest`, `${isk(cost('estimated'))} áætlað`];
+  if (missing) totals.push(missing === 1 ? '1 vara án verðs' : `${missing} vörur án verðs`);
+  shoppingTotal.hidden = !listed.length;
+  shoppingTotal.textContent = totals.join(' · ');
   const excluded = shopping.items.filter(item => item.excluded);
   excludedShopping.hidden = !excluded.length;
   excludedShopping.querySelector('summary').textContent = `Tekið af listanum (${excluded.length})`;
@@ -947,7 +1079,7 @@ menuApprove.addEventListener('click', async () => {
   if (menuSaving) return;
   setShoppingMessage('Sæki hráefni og tek saman lista …');
   const saved = await saveMenuChange(draft => { draft.shoppingAction = { type:'approve' }; });
-  setShoppingMessage(saved ? 'Innkaupalistinn var vistaður.' : 'Innkaupalistinn vistaðist ekki. Reyndu aftur.');
+  setShoppingMessage(saved ? 'Matseðillinn er virkur og innkaupalistinn uppfærður.' : 'Samþykki mistókst. Reyndu aftur.');
 });
 async function updateShopping(action, message = '') {
   if (version === null || sendingTodo) return false;
@@ -960,11 +1092,41 @@ shoppingList.addEventListener('change', async event => {
   if (checkbox) await updateShopping({ type:'toggle', id:checkbox.dataset.shoppingId, done:checkbox.checked });
 });
 shoppingReview.addEventListener('click', async event => {
+  const priceButton = event.target.closest('button[data-price-id]');
+  if (priceButton) return editShoppingPrice(priceButton.dataset.priceId);
   const button = event.target.closest('button[data-exclude-id]');
   if (!button) return;
   const excluded = button.dataset.exclude === 'true';
   await updateShopping({ type:'exclude', id:button.dataset.excludeId, excluded },
     excluded ? 'Vara tekin af listanum.' : 'Vara sett aftur á listann.');
+});
+
+const shoppingPriceForm = document.getElementById('shoppingPriceForm');
+const shoppingPriceStatus = document.getElementById('shoppingPriceStatus');
+let shoppingPriceId;
+
+function editShoppingPrice(id) {
+  const item = shopping?.items.find(entry => entry.id === id);
+  if (!item) return;
+  shoppingPriceId = id;
+  document.getElementById('shoppingPriceItem').textContent = item.name;
+  shoppingPriceForm.elements.amount.value = item.price?.amount ?? '';
+  shoppingPriceForm.elements.priceStatus.value = item.price?.status || 'estimated';
+  shoppingPriceStatus.textContent = '';
+  shoppingPriceDialog.showModal();
+}
+
+document.getElementById('closeShoppingPrice').addEventListener('click', () => shoppingPriceDialog.close());
+shoppingPriceForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const { amount, priceStatus } = Object.fromEntries(new FormData(shoppingPriceForm));
+  const price = amount === '' ? null : { amount:Number(amount), status:priceStatus };
+  const submit = event.submitter;
+  submit.disabled = true;
+  const saved = await updateShopping({ type:'price', id:shoppingPriceId, price }, 'Verð vistað.');
+  submit.disabled = false;
+  if (saved) shoppingPriceDialog.close();
+  else shoppingPriceStatus.textContent = 'Verðið vistaðist ekki. Reyndu aftur.';
 });
 shoppingAdd.addEventListener('submit', async event => {
   event.preventDefault();
@@ -1373,7 +1535,7 @@ if (location.protocol === 'https:' || location.protocol === 'http:') {
       today = date;
       renderToday();
     }
-    if (followsCurrentWeek && !mealDialog.open) selectMenuWeek(mondayFor(today));
+    if (followsCurrentWeek && !menuDialogIsOpen()) selectMenuWeek(mondayFor(today));
     refreshShared();
   }, 15000);
   setInterval(() => { if (tripsPageIsOpen()) refreshTripPlans(); }, 15000);

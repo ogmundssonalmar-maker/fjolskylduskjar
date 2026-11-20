@@ -1,10 +1,10 @@
 # Heima hjá okkur
 
-Íslenskur fjölskylduskjár sem byggir á v2 frumgerðinni. HTML, CSS og JavaScript sjá um viðmótið. Cloudflare Pages Functions sannreyna innskráningu á netþjóni.
+Íslenskur fjölskylduskjár sem byggir á v2 frumgerðinni. HTML, CSS og JavaScript sjá um viðmótið. Cloudflare Worker sannreynir aðgang að sameiginlegum gögnum og geymir þau í D1. Pages Functions geta notað Cloudflare Access.
 
 ## Staðbundin þróun
 
-Keyrið `npm ci` og `npm test` með Node.js 22 eða nýrra. `npm run build` býr til `dist/`. Til að skoða viðmótið staðbundið má opna `index.html` beint. Verkefni og breytingar á dæmimatseðli vistast í viðkomandi vafra. Sameiginleg vistun, lifandi dagatal og veður bíða síðari áfanga.
+Keyrið `npm ci` og `npm test` með Node.js 22 eða nýrra. `npm run build` býr til `dist/`. Notið `wrangler dev` með staðbundnu D1 til að prófa samstillingu og samþykkt. Sé `index.html` opnuð beint vistast verkefni og matseðilsdrög í vafranum.
 
 Skjárinn sýnir vistaða dagskrá úr v2 á meðan Google Calendar er ótengt. Hann sýnir einnig ferðirnar og staðfestan skipulagsdag 4. janúar. Dagsetningar Marbakka 2026–2027 koma úr [skóladagatali Marbakka](https://marbakki.kopavogur.is/foreldrar/leikskoladagatal/) og [stafrænu dagatali Kópavogsbæjar](https://www.kopavogur.is/thjonusta/born-og-ungmenni/stafraen-skoladagatol).
 
@@ -48,7 +48,7 @@ Fyrir staðbundna Pages-keyrslu notið `wrangler pages dev --config wrangler.pag
 
 ## Breytingakóði á Worker
 
-Setjið sterkan, einstakan kóða sem `HOUSEHOLD_EDIT_CODE` í **Runtime variables and secrets → Production**. Veljið **Secret**. Á hverju tæki er kóðinn sleginn inn undir **Virkja samstillingu**. Tækið fær undirritaða vafraköku sem gildir í 90 daga. Þegar kóðanum er breytt þarf að virkja tækin aftur. D1 geymir verkefni og matseðla og skráning á tæki veitir aðgang að báðu. Opna yfirlitið og Google-dagatalið krefjast ekki kóðans.
+Setjið sterkan, einstakan kóða sem `HOUSEHOLD_EDIT_CODE` í **Runtime variables and secrets → Production**. Veljið **Secret**. Á hverju tæki er kóðinn sleginn inn undir **Virkja samstillingu**. Tækið fær undirritaða vafraköku sem gildir í 90 daga. Þegar kóðanum er breytt þarf að virkja tækin aftur. D1 geymir verkefni og matseðla og skráning á tæki veitir aðgang að báðu. Yfirlitið og Google-dagatalið eru aðgengileg á Worker, en samþykktur kvöldmatur birtist þeim tækjum sem hafa aðgang að fjölskyldugögnunum.
 
 ## Viðburðir skráðir í Google Calendar
 
@@ -56,9 +56,48 @@ Eigandi hefur samþykkt skrifaðgang fyrir Fjölskyldudagatalið. Til að virkja
 
 Áður en nýr viðburður er vistaður þarf að virkja samstillingu með breytingakóðanum. Viðburðurinn fer á sameiginlega dagatalið. Litaflokkurinn er vistaður með viðburðinum svo hann skili sér í mánaðarsýninni og í Google Calendar.
 
-## Innkaupalisti
+## Vikumatseðill og innkaupalisti
 
-Samþykki matseðils býr til sameiginlegan innkaupalista. Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu. Fyrir máltíðir með Krónuuppskrift og auðan hráefnalista les Workerinn hráefnin úr [opinberri lestrartengingu Krónunnar](https://www.kronan.is/frettir/voruurval-kronunnar-adgengilegt-i-claude) og miðar magnið við fjóra þegar skammtastærð er tiltæk. Ef þjónustan svarar ekki notar skjárinn vistaða hráefnalista fyrir Krónuréttina sem fylgja dæmimatseðlinum. Samþykkti listinn og hak við keypt atriði geymast með matseðlinum í D1. Breytingar á drögum taka gildi á listanum við næsta samþykki.
+Hver vika hefst á mánudegi og hefur eina færslu í `household_menu_weeks` í D1. Færslan geymir drögin, síðustu samþykktu útgáfu, samþykktartíma og innkaupalistann. Máltíð geymir heiti, tíma, hráefni og valfrjálsa uppskriftaslóð, heiti uppskriftar, skammta og leiðbeiningar. Sérstök D1-mígrun er óþörf fyrir nýju reitina. Eldri samþykktir listar varðveitast. Þegar drög höfðu breyst frá samþykki eru heiti og hráefni samþykktrar útgáfu lesin úr eldri innkaupalistanum.
+
+- **Matseðill** sýnir drög sem má breyta. **Samþykkja matseðil** birtir útgáfuna á yfirlitinu og útbýr innkaupalista. Við síðari breytingar haldast síðasti samþykkti matseðillinn og listinn í gildi þar til drögin eru samþykkt.
+- **Innkaupin** geyma magn og einingu ef þau eru þekkt. Veljið **Verð** á vörulínu til að skrá heildarverð vörunnar fyrir skráð magn í ISK og merkja það **Áætlað** eða **Staðfest**. Auður verðreitur merkir óþekkt verð. Verð fyrir breytt magn þarf að skrá aftur. Samantekt sýnir staðfest verð, áætluð verð og fjölda vara án verðs.
+- Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu. Fyrir máltíð með Krónuuppskrift og auðan hráefnalista sækir Workerinn hráefni við samþykki og miðar við fjóra þegar skammtastærð er þekkt. Viðbótarvörur og verð eru skráð handvirkt í innkaupalistann.
+
+API slóðin er `/api/household/menu?week=YYYY-MM-DD`. `GET` skilar drögum, samþykktri útgáfu, innkaupalista og útgáfunúmeri. `PUT` vistar máltíðir eða aðgerð á innkaupalista. `shoppingAction.type = "approve"` samþykkir drögin. `POST` flytur gögn inn sem drög með `{ "version": 0, "data": { ... } }` þar sem `version` á að koma úr nýjasta lestri. Vistun krefst sama uppruna, JSON og gilds útgáfunúmers. Báðar aðferðir nota núverandi aðgangsstýringu og skila `409` ef önnur vistun varð á undan. Svör með matseðilsgögnum eru merkt `private, no-store`.
+
+### Flytja inn JSON úr ChatGPT
+
+Veljið rétta viku undir **Matseðill → Flytja inn JSON**, límið gögnin inn og veljið **Vista sem drög**. Ein til sjö máltíðir eru leyfðar. Hver máltíð þarf `date` í valinni viku og `name`. Aðrir reitir eru valfrjálsir. Vistunin uppfærir dagana sem koma fram í JSON. Skráðir dagar utan innflutnings varðveitast. Yfirfarið drögin og samþykkið þegar þau eru tilbúin.
+
+```json
+{
+  "week": "2026-11-23",
+  "meals": [
+    {
+      "date": "2026-11-23",
+      "name": "Tómatsúpa",
+      "minutes": 30,
+      "ingredients": ["500 g tómatar", "1 stk. laukur"],
+      "recipe": {
+        "title": "Tómatsúpa fyrir fjóra",
+        "servings": 4,
+        "instructions": "Mýkið laukinn. Bætið tómötum við, látið malla og maukið."
+      }
+    }
+  ]
+}
+```
+
+### Vikuleg drög með OpenAI og Cron
+
+Workerinn er með `scheduled`-meðhöndlun. Hún notar Responses API og sama gagnapróf og JSON-innflutningur. Hún sendir almennar óskir um matseðil fyrir fjóra og mánudagsdagsetningu næstu viku. D1 leyfir að hámarki eina sjálfvirka API-beiðni fyrir hverja viku og beiðnin takmarkast við 3.500 úttakstóka. Keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu.
+
+Sjálfvirka keyrslan er óvirk. Áður en hún er virkjuð þarf að yfirfara eftirfarandi.
+
+1. Velja líkan sem styður JSON-úttak í Responses API, fara yfir verð á inntaks- og úttakstókum og stilla kostnaðarviðvaranir fyrir OpenAI-verkefnið.
+2. Prófa JSON-úttak með því líkani og staðfesta í prófunarumhverfi að drögin þurfi samþykki fjölskyldunnar. Setja síðan `OPENAI_API_KEY` sem Cloudflare Secret og `OPENAI_MENU_MODEL` sem runtime-breytu fyrir rétt umhverfi.
+3. Virkja `WEEKLY_MENU_AUTOMATION_ENABLED` eftir yfirferð og setja `[triggers]` með `crons = ["0 17 * * SUN"]` í Worker-stillingar fyrir sunnudaga kl. 17:00 að íslenskum tíma. Ef sjálfvirk beiðni mistekst má vista drög með JSON-innflutningi. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur.
 
 ### Microsoft To Do
 

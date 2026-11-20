@@ -3,6 +3,7 @@ import { household } from './household.js';
 import { trips } from './trips.js';
 import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
+import { generateWeeklyDraft } from './menu-automation.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
   const { pathname } = new URL(request.url);
@@ -28,5 +29,8 @@ export async function serveWorker(request, env, assets = env.ASSETS) {
 export default {
   fetch(request, env) {
     return serveWorker(request, env);
+  },
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(generateWeeklyDraft(env, controller.scheduledTime));
   },
 };

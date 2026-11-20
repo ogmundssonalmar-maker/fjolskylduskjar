@@ -58,6 +58,11 @@ export function manualShoppingItem(line) {
     id:JSON.stringify(['manual', ...key]), done:false, manual:true };
 }
 
+export function validPrice(price) {
+  return price === null || (Number.isSafeInteger(price?.amount) && price.amount >= 0 && price.amount <= 10000000 &&
+    ['estimated', 'confirmed'].includes(price.status));
+}
+
 export function buildShopping(meals, previous, now = new Date()) {
   const week = weekStart(now);
   const checked = new Map((previous?.week === week ? previous.items : []).map(item => [item.id, item]));
@@ -81,6 +86,7 @@ export function buildShopping(meals, previous, now = new Date()) {
     const amount = item.amount === null ? null : round(item.amount);
     const old = checked.get(item.id);
     return { ...item, amount, done: Boolean(old?.done && old.amount === amount),
+      ...(old?.price && old.amount === amount ? { price:old.price } : {}),
       ...(old?.excluded ? { excluded:true } : {}) };
   });
   combined.push(...[...checked.values()].filter(item => item.manual));

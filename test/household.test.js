@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { household, readApprovedShopping } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
+import { generateWeeklyDraft } from '../src/menu-automation.js';
 import worker from '../src/worker.js';
 
 function testD1(t) {
@@ -334,6 +335,10 @@ test('approval imports recipe ingredients and shares checked items while preserv
   assert.equal((await put(current)).status, 200);
   const edited = await get();
   assert.equal(edited.shopping.items.find(item => item.id === beef.id).amount, 1000);
+  const legacyWeek = await (await household(new Request(url + '/menu?week=' + edited.shopping.week), { DB })).json();
+  assert.equal(legacyWeek.status, 'active_with_draft');
+  assert.notDeepEqual(legacyWeek.activeMeals[1].ingredients, edited.meals[1].ingredients);
+  assert.equal(legacyWeek.home[edited.shopping.week][1].name, 'Annar réttur');
   const updated = await (await put({ ...edited, shoppingAction:{ type:'approve' } })).json();
   assert.equal(updated.shopping.items.find(item => item.id === beef.id).amount, 1500);
   assert.equal(updated.shopping.items.find(item => item.id === beef.id).done, false);
@@ -402,6 +407,109 @@ test('weekly menus preserve the existing plan and track approval, checkmarks and
   const restored = await changeShopping({ type:'exclude', id:onion.id, excluded:false });
   assert.equal(restored.items.find(item => item.id === onion.id).excluded, false);
   assert.deepEqual(await readApprovedShopping(DB, originalWeek), originalList);
+});
+
+test('JSON imports and meal edits stay private drafts until approval while prices stay with matching quantities', async t => {
+  const base = 'https://example.com';
+  const DB = testD1(t);
+  const env = { DB, HOUSEHOLD_EDIT_CODE:'menu-test-edit-code' };
+  const week = '2026-12-07';
+  const path = `/api/household/menu?week=${week}`;
+  const call = (url, method = 'GET', data, cookie = '', origin = base) => worker.fetch(new Request(base + url, {
+    method, headers:{ Origin:origin, Cookie:cookie, 'Content-Type':'application/json' },
+    body:data === undefined ? undefined : JSON.stringify(data),
+  }), env);
+  const session = await call('/api/household/session', 'POST', { code:env.HOUSEHOLD_EDIT_CODE });
+  const cookie = session.headers.get('Set-Cookie').split(';')[0];
+  const read = async () => {
+    const response = await call(path, 'GET', undefined, cookie);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+    return response.json();
+  };
+  const write = (method, data, origin) => call(path, method, data, cookie, origin);
+  const recipe = { title:'Einföld súpa', servings:4, instructions:'Sjóðið tómatana.', extra:'strip this' };
+  const data = { week, meals:[{ date:week, name:'Tómatsúpa', ingredients:['500 g tómatar'], recipe },
+    { date:'2026-12-08', name:'Pasta', ingredients:['250 g pasta'] }] };
+
+  assert.equal((await call(path)).status, 403);
+  assert.equal((await call(path, 'POST', { version:0, data })).status, 403);
+  assert.equal((await write('POST', { version:0, data }, 'https://other.example')).status, 403);
+  assert.equal((await write('POST', { version:0, data:{ ...data, meals:[data.meals[0], data.meals[0]] } })).status, 400);
+  assert.equal((await write('POST', { version:0, data:{ ...data,
+    meals:[{ ...data.meals[0], url:'javascript:alert(1)' }] } })).status, 400);
+  assert.equal((await read()).version, 0);
+
+  const imported = await write('POST', { version:0, data, shoppingAction:{ type:'approve' } });
+  assert.equal(imported.status, 200);
+  let state = await read();
+  assert.equal(state.status, 'draft');
+  assert.equal(state.home[week], null);
+  assert.equal(state.shopping, null);
+  assert.equal(state.meals[6].name, 'Óskráð');
+  assert.deepEqual(state.meals[0].recipe, { title:recipe.title, servings:4, instructions:recipe.instructions });
+  assert.equal((await write('POST', { version:0, data })).status, 409);
+  const action = async shoppingAction => {
+    const response = await write('PUT', { ...await read(), shoppingAction });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  state = await action({ type:'approve' });
+  assert.equal(state.status, 'active');
+  assert.match(state.approvedAt, /^20\d\d-/);
+  const tomato = state.shopping.items.find(item => item.name === 'tómatar');
+  const pasta = state.shopping.items.find(item => item.name === 'pasta');
+  assert.equal((await write('PUT', { ...state, shoppingAction:{ type:'price', id:tomato.id,
+    price:{ amount:-5, status:'confirmed' } } })).status, 400);
+  await action({ type:'price', id:tomato.id, price:{ amount:699, status:'estimated' } });
+  await action({ type:'price', id:pasta.id, price:{ amount:349, status:'confirmed' } });
+  const update = { week, meals:[{ date:week, name:'Tómatsósa', ingredients:['750 g tómatar'] }] };
+  assert.equal((await write('POST', { version:(await read()).version, data:update })).status, 200);
+  state = await read();
+  assert.equal(state.status, 'active_with_draft');
+  assert.equal(state.meals[0].name, 'Tómatsósa');
+  assert.equal(state.meals[1].name, 'Pasta');
+  assert.equal(state.home[week][0].name, 'Tómatsúpa');
+  assert.deepEqual(state.shopping.items.find(item => item.id === tomato.id).price, { amount:699, status:'estimated' });
+  state = await action({ type:'approve' });
+  assert.equal(state.activeMeals[0].name, 'Tómatsósa');
+  assert.equal(state.shopping.items.find(item => item.id === tomato.id).price, undefined);
+  assert.deepEqual(state.shopping.items.find(item => item.id === pasta.id).price, { amount:349, status:'confirmed' });
+  state = await action({ type:'price', id:pasta.id, price:null });
+  assert.equal(state.shopping.items.find(item => item.id === pasta.id).price, null);
+});
+
+test('scheduled generation is opt-in, calls OpenAI once per week, and can only write a draft into an empty week', async t => {
+  const DB = testD1(t);
+  const env = { DB, OPENAI_API_KEY:'test-key', OPENAI_MENU_MODEL:'test-model' };
+  const scheduledTime = Date.parse('2026-12-06T17:00:00Z');
+  const week = '2026-12-07';
+  const data = { week, meals:Array.from({ length:7 }, (_, index) => ({
+    date:`2026-12-${String(7 + index).padStart(2, '0')}`, name:'Súpa', ingredients:['500 g gulrætur'],
+  })) };
+  const openai = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.equal(options.headers.Authorization, 'Bearer test-key');
+    const body = JSON.parse(options.body);
+    assert.equal(body.store, false);
+    assert.equal(body.model, 'test-model');
+    assert.equal(body.max_output_tokens, 3500);
+    assert.match(body.input, /2026-12-07/);
+    return Response.json({ status:'completed', output:[{ content:[{ type:'output_text', text:JSON.stringify(data) }] }] });
+  });
+  await generateWeeklyDraft(env, scheduledTime);
+  assert.equal(openai.mock.callCount(), 0);
+  env.WEEKLY_MENU_AUTOMATION_ENABLED = 'true';
+  await Promise.all([generateWeeklyDraft(env, scheduledTime), generateWeeklyDraft(env, scheduledTime)]);
+  assert.equal(openai.mock.callCount(), 1);
+  const request = new Request('https://example.com/api/household/menu?week=' + week);
+  const state = await (await household(request, env)).json();
+  assert.equal(state.status, 'draft');
+  assert.equal(state.meals[0].name, 'Súpa');
+  assert.equal(state.home[week], null);
+  assert.equal(state.shopping, null);
+  await generateWeeklyDraft(env, scheduledTime);
+  assert.equal(openai.mock.callCount(), 1);
 });
 
 test('Microsoft To Do connects an owned shared list and exports shopping without duplicate tasks', async t => {

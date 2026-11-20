@@ -1,6 +1,7 @@
 import { CalendarError, addCalendarEvent, readCalendar } from './calendar.js';
 import { fillKronanIngredients } from './kronan.js';
-import { buildShopping, manualShoppingItem, validWeek, weekStart } from './shopping.js';
+import { buildShopping, manualShoppingItem, menuSignature, validPrice, validWeek, weekStart } from './shopping.js';
+import { emptyMealName, emptyMenu, importMeals, normalizeRecipe, validIngredientLines, validMinutes, validRecipe, validRecipeUrl } from './menu-import.js';
 
 const response = (body, status = 200) => Response.json(body, {
   status,
@@ -63,8 +64,51 @@ async function readWeeklyMenus(db, weeks) {
   const legacy = rows.size < weeks.length ? storedMenu(await readHousehold(db)) : null;
   return Object.fromEntries(weeks.map(week => {
     const row = rows.get(week);
-    return [week, row ? { version:row.version, ...storedMenu(row) } : { version:0, ...legacyMenu(legacy, week) }];
+    const menu = row ? storedMenu(row) : legacyMenu(legacy, week);
+    return [week, {
+      version:row?.version ?? 0, ...menu,
+      activeMeals:Object.hasOwn(menu, 'activeMeals') ? menu.activeMeals : legacyActiveMeals(menu),
+      approvedAt:menu.approvedAt ?? null,
+    }];
   }));
+}
+
+function legacyActiveMeals(menu) {
+  if (!menu.shopping) return null;
+  if (menu.shopping.menu === menuSignature(menu.meals)) return menu.meals;
+  // The old list signature retains the last approved names and ingredients.
+  const signature = JSON.parse(menu.shopping.menu);
+  return emptyMenu().map((meal, index) => {
+    const [name, ...ingredients] = signature[index];
+    const previous = menu.meals[index];
+    return { ...meal, ...(previous?.name === name ? { url:previous.url, minutes:previous.minutes } : {}), name, ingredients };
+  });
+}
+
+export async function menuWeekExists(db, week) {
+  const menu = (await readWeeklyMenus(db, [week]))[week];
+  return menu.version > 0 || menu.meals.length > 0;
+}
+
+function menuState(stage) {
+  if (!stage.activeMeals) return 'draft';
+  return JSON.stringify(stage.meals) === JSON.stringify(stage.activeMeals) ? 'active' : 'active_with_draft';
+}
+
+function writeWeeklyMenu(db, week, version, update) {
+  const stored = JSON.stringify(update);
+  const query = version === 0
+    ? db.prepare('INSERT INTO household_menu_weeks VALUES (?, 1, ?) ON CONFLICT(week) DO NOTHING').bind(week, stored)
+    : db.prepare('UPDATE household_menu_weeks SET version = version + 1, meals = ? WHERE week = ? AND version = ?')
+      .bind(stored, week, version);
+  return query.run();
+}
+
+export async function saveGeneratedMenu(db, week, data) {
+  const meals = importMeals(data, week);
+  if (await menuWeekExists(db, week)) return false;
+  const { meta } = await writeWeeklyMenu(db, week, 0, { meals, activeMeals:null, approvedAt:null, shopping:null });
+  return Boolean(meta.changes);
 }
 
 export async function readApprovedShopping(db, week) {
@@ -81,30 +125,36 @@ function validMeals(meals) {
   return Array.isArray(meals) && meals.length === 7
     && meals.every(meal => typeof meal?.name === 'string' && meal.name.trim().length > 0
       && meal.name.length <= 180 && typeof meal.day === 'string' && meal.day.length <= 4
-      && (meal.minutes === null || (Number.isInteger(meal.minutes) && meal.minutes >= 0 && meal.minutes <= 1440))
-      && (meal.ingredients === undefined || (Array.isArray(meal.ingredients) && meal.ingredients.length <= 48
-        && meal.ingredients.every(line => typeof line === 'string' && line.trim() && line.length <= 180)))
-      && typeof meal.url === 'string' && meal.url.length <= 1024
-      && (meal.url === '' || URL.canParse(meal.url) && ['https:', 'http:'].includes(new URL(meal.url).protocol)));
+      && validMinutes(meal.minutes) && (meal.ingredients === undefined || validIngredientLines(meal.ingredients))
+      && validRecipeUrl(meal.url) && validRecipe(meal.recipe));
+}
+
+function normalizeMeals(meals, previousMeals) {
+  return meals.map(({ day, name, minutes, url, ingredients, recipe }, index) => {
+    const previous = previousMeals[index];
+    const lines = ingredients ?? (previous?.name === name && previous?.url === url ? previous.ingredients : undefined);
+    return { day, name, minutes, url, ...(lines ? { ingredients: lines.map(line => line.trim()) } : {}),
+      ...(recipe ? { recipe:normalizeRecipe(recipe) } : {}) };
+  });
 }
 
 async function updateMenu(state, menu, week) {
-  let meals = state.meals.map(({ day, name, minutes, url, ingredients }, index) => {
-    const previous = menu.meals[index];
-    const lines = ingredients ?? (previous?.name === name && previous?.url === url ? previous.ingredients : undefined);
-    return { day, name, minutes, url, ...(lines ? { ingredients: lines.map(line => line.trim()) } : {}) };
-  });
+  let meals = normalizeMeals(state.meals, menu.meals);
   let shopping = menu.shopping;
   const action = state.shoppingAction;
   if (action?.type === 'approve') {
+    if (meals.every(meal => meal.name === emptyMealName)) return response({ error:'Skráðu minnst eina máltíð.' }, 400);
     meals = await fillKronanIngredients(meals);
     shopping = buildShopping(meals, shopping, week ? new Date(week) : undefined);
-  } else if (action?.type === 'toggle' || action?.type === 'exclude') {
-    const field = action.type === 'toggle' ? 'done' : 'excluded';
-    if (typeof action[field] !== 'boolean' || !shopping?.items.some(item => item.id === action.id)) {
+  } else if (['toggle', 'exclude', 'price'].includes(action?.type)) {
+    const field = { toggle:'done', exclude:'excluded', price:'price' }[action.type];
+    const value = action[field];
+    const valid = field === 'price' ? validPrice(value) : typeof value === 'boolean';
+    if (!valid || !shopping?.items.some(item => item.id === action.id)) {
       return response({ error: 'Atriðið er ekki á innkaupalistanum.' }, 400);
     }
-    shopping = { ...shopping, items: shopping.items.map(item => item.id === action.id ? { ...item, [field]:action[field] } : item) };
+    const update = field === 'price' && value !== null ? { amount:value.amount, status:value.status } : value;
+    shopping = { ...shopping, items: shopping.items.map(item => item.id === action.id ? { ...item, [field]:update } : item) };
   } else if (action?.type === 'add') {
     if (!shopping || typeof action.line !== 'string' || !action.line.trim() || action.line.length > 180) {
       return response({ error: 'Skráðu heiti vörunnar.' }, 400);
@@ -114,6 +164,7 @@ async function updateMenu(state, menu, week) {
     if (!existing && shopping.items.filter(entry => entry.manual).length >= 100) {
       return response({ error: 'Hámarksfjöldi handskráðra vara er 100 á viku.' }, 400);
     }
+    if (existing?.price && existing.amount === item.amount) item.price = existing.price;
     shopping = { ...shopping, items: [...shopping.items.filter(entry => entry.id !== item.id), item] };
   } else if (action !== undefined) {
     return response({ error: 'Ógild innkaupaaðgerð.' }, 400);
@@ -131,9 +182,11 @@ async function weeklyMenu(request, db, week) {
     next.setUTCDate(next.getUTCDate() + 7);
     const weeks = [...new Set([week, current, weekStart(next)])];
     const menus = await readWeeklyMenus(db, weeks);
-    return response({ week, ...menus[week], home: Object.fromEntries(weeks.map(key => [key, menus[key].meals])) });
+    const stage = menus[week];
+    return response({ week, ...stage, status:menuState(stage),
+      home:Object.fromEntries(weeks.map(key => [key, menus[key].activeMeals])) });
   }
-  if (request.method !== 'PUT') return response({ error: 'Aðferð óheimil.' }, 405);
+  if (!['PUT', 'POST'].includes(request.method)) return response({ error: 'Aðferð óheimil.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin ||
       request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') {
     return response({ error: 'Beiðni óheimil.' }, 403);
@@ -146,17 +199,32 @@ async function weeklyMenu(request, db, week) {
   } catch {
     return response({ error: 'Ógild beiðni.' }, 400);
   }
-  if (!versionIsValid(state?.version) || !validMeals(state.meals)) return response({ error: 'Ógild gögn.' }, 400);
+  if (!versionIsValid(state?.version)) return response({ error: 'Ógild útgáfa.' }, 400);
   const current = (await readWeeklyMenus(db, [week]))[week];
   if (current.version !== state.version) return conflict();
-  const update = await updateMenu(state, current, week);
-  if (update instanceof Response) return update;
-  const stored = JSON.stringify(update);
-  const query = state.version === 0
-    ? db.prepare('INSERT INTO household_menu_weeks VALUES (?, 1, ?) ON CONFLICT(week) DO NOTHING').bind(week, stored)
-    : db.prepare('UPDATE household_menu_weeks SET version = version + 1, meals = ? WHERE week = ? AND version = ?')
-      .bind(stored, week, state.version);
-  return (await query.run()).meta.changes ? response({ week, version:state.version + 1, ...update }) : conflict();
+  let update;
+  if (request.method === 'POST') {
+    try {
+      const base = current.meals.length === 7 ? current.meals
+        : validMeals(state.meals) ? normalizeMeals(state.meals, []) : undefined;
+      const meals = importMeals(state.data, week, base);
+      update = { meals, shopping:current.shopping };
+    } catch (error) {
+      return response({ error:error.message }, 400);
+    }
+  } else {
+    if (!validMeals(state.meals)) return response({ error: 'Ógild gögn.' }, 400);
+    // Shopping edits act on the published list, leaving the working draft as it was stored.
+    const requested = state.shoppingAction && state.shoppingAction.type !== 'approve' && current.meals.length === 7
+      ? { ...state, meals:current.meals } : state;
+    update = await updateMenu(requested, current, week);
+    if (update instanceof Response) return update;
+  }
+  const approved = request.method === 'PUT' && state.shoppingAction?.type === 'approve';
+  update.activeMeals = approved ? update.meals : current.activeMeals;
+  update.approvedAt = approved ? new Date().toISOString() : current.approvedAt;
+  const { meta } = await writeWeeklyMenu(db, week, state.version, update);
+  return meta.changes ? response({ week, version:state.version + 1, ...update, status:menuState(update) }) : conflict();
 }
 
 export async function household(request, env) {
