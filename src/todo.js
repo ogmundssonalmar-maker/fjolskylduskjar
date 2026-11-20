@@ -175,7 +175,7 @@ async function exportItems(env, connection, week) {
   if (!connection.list_id) throw new TodoError('Veldu sameiginlega listann í Microsoft To Do.', 409);
   const shopping = await readApprovedShopping(env.DB, week);
   if (!shopping) throw new TodoError('Samþykktu matseðilinn fyrst.', 409);
-  const waiting = shopping.items.filter(item => !item.done);
+  const waiting = shopping.items.filter(item => !item.done && !item.excluded);
   if (!waiting.length) return { added:0, updated:0, skipped:0, failed:0 };
 
   const now = Date.now();

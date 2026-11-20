@@ -385,6 +385,23 @@ test('weekly menus preserve the existing plan and track approval, checkmarks and
   assert.equal(nextList.items[0].done, true);
   assert.equal(await readApprovedShopping(DB, previousWeek), null);
   assert.deepEqual((await read(nextWeek)).meals, future);
+
+  const changeShopping = async action => {
+    const response = await write(nextWeek, { ...await read(nextWeek), shoppingAction:action });
+    assert.equal(response.status, 200);
+    return (await response.json()).shopping;
+  };
+  const withExtra = await changeShopping({ type:'add', line:'2 stk. epli' });
+  const extra = withExtra.items.find(item => item.manual);
+  assert.equal(extra.name, 'epli');
+  assert.equal(extra.amount, 2);
+  await changeShopping({ type:'exclude', id:onion.id, excluded:true });
+  const regenerated = await changeShopping({ type:'approve' });
+  assert.deepEqual(regenerated.items.find(item => item.manual), extra);
+  assert.equal(regenerated.items.find(item => item.id === onion.id).excluded, true);
+  const restored = await changeShopping({ type:'exclude', id:onion.id, excluded:false });
+  assert.equal(restored.items.find(item => item.id === onion.id).excluded, false);
+  assert.deepEqual(await readApprovedShopping(DB, originalWeek), originalList);
 });
 
 test('Microsoft To Do connects an owned shared list and exports shopping without duplicate tasks', async t => {
@@ -455,8 +472,18 @@ test('Microsoft To Do connects an owned shared list and exports shopping without
   const nextWeek = '2026-11-23';
   const weeklyMenu = '/api/household/menu?week=' + nextWeek;
   meals[0] = {...meals[0], name:'Salat', ingredients:['2 stk. gulrót']};
-  assert.equal((await call(weeklyMenu,'PUT',{version:0,meals,shoppingAction:{type:'approve'}},cookie)).status,200);
+  const approval = await call(weeklyMenu,'PUT',{version:0,meals,shoppingAction:{type:'approve'}},cookie);
+  assert.equal(approval.status,200);
+  const approved = await approval.json();
+  const carrot = approved.shopping.items[0];
+  const exclude = await call(weeklyMenu,'PUT',{
+    ...approved, shoppingAction:{type:'exclude',id:carrot.id,excluded:true},
+  },cookie);
+  assert.equal(exclude.status,200);
+  assert.equal((await call(weeklyMenu,'PUT',{
+    ...await exclude.json(), shoppingAction:{type:'add',line:'2 stk. epli'},
+  },cookie)).status,200);
   const followingWeek = await (await call('/api/todo/export','POST',{week:nextWeek},cookie)).json();
   assert.deepEqual(followingWeek,{added:1,updated:0,skipped:0,failed:0});
-  assert.equal(batches[1][0].body.title,'gulrót · 2 stk');
+  assert.equal(batches[1][0].body.title,'epli · 2 stk');
 });

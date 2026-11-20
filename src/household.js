@@ -1,6 +1,6 @@
 import { CalendarError, addCalendarEvent, readCalendar } from './calendar.js';
 import { fillKronanIngredients } from './kronan.js';
-import { buildShopping, validWeek, weekStart } from './shopping.js';
+import { buildShopping, manualShoppingItem, validWeek, weekStart } from './shopping.js';
 
 const response = (body, status = 200) => Response.json(body, {
   status,
@@ -99,11 +99,22 @@ async function updateMenu(state, menu, week) {
   if (action?.type === 'approve') {
     meals = await fillKronanIngredients(meals);
     shopping = buildShopping(meals, shopping, week ? new Date(week) : undefined);
-  } else if (action?.type === 'toggle') {
-    if (typeof action.done !== 'boolean' || !shopping?.items.some(item => item.id === action.id)) {
+  } else if (action?.type === 'toggle' || action?.type === 'exclude') {
+    const field = action.type === 'toggle' ? 'done' : 'excluded';
+    if (typeof action[field] !== 'boolean' || !shopping?.items.some(item => item.id === action.id)) {
       return response({ error: 'Atriðið er ekki á innkaupalistanum.' }, 400);
     }
-    shopping = { ...shopping, items: shopping.items.map(item => item.id === action.id ? { ...item, done: action.done } : item) };
+    shopping = { ...shopping, items: shopping.items.map(item => item.id === action.id ? { ...item, [field]:action[field] } : item) };
+  } else if (action?.type === 'add') {
+    if (!shopping || typeof action.line !== 'string' || !action.line.trim() || action.line.length > 180) {
+      return response({ error: 'Skráðu heiti vörunnar.' }, 400);
+    }
+    const item = manualShoppingItem(action.line);
+    const existing = shopping.items.find(entry => entry.id === item.id);
+    if (!existing && shopping.items.filter(entry => entry.manual).length >= 100) {
+      return response({ error: 'Hámarksfjöldi handskráðra vara er 100 á viku.' }, 400);
+    }
+    shopping = { ...shopping, items: [...shopping.items.filter(entry => entry.id !== item.id), item] };
   } else if (action !== undefined) {
     return response({ error: 'Ógild innkaupaaðgerð.' }, 400);
   }

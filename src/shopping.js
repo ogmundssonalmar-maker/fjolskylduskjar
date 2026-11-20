@@ -46,6 +46,18 @@ export function validWeek(week) {
   return Number.isFinite(date.valueOf()) && weekStart(date) === week;
 }
 
+function shoppingItem(line) {
+  const item = parseIngredient(line.trim().replace(/\s+/g, ' '));
+  const key = [item.name.normalize('NFC').toLocaleLowerCase('is'), item.unit];
+  return { item, key };
+}
+
+export function manualShoppingItem(line) {
+  const { item, key } = shoppingItem(line);
+  return { ...item, amount:item.amount === null ? null : round(item.amount),
+    id:JSON.stringify(['manual', ...key]), done:false, manual:true };
+}
+
 export function buildShopping(meals, previous, now = new Date()) {
   const week = weekStart(now);
   const checked = new Map((previous?.week === week ? previous.items : []).map(item => [item.id, item]));
@@ -57,18 +69,21 @@ export function buildShopping(meals, previous, now = new Date()) {
       missing.push(meal.name);
     }
     for (const line of meal.ingredients || []) {
-      const { name, amount, unit } = parseIngredient(line.trim().replace(/\s+/g, ' '));
-      const id = JSON.stringify([name.normalize('NFC').toLocaleLowerCase('is'), unit]);
-      const item = items.get(id);
-      if (item && amount !== null) item.amount += amount;
-      else if (!item) items.set(id, { id, name, amount, unit });
+      const { item, key } = shoppingItem(line);
+      const id = JSON.stringify(key);
+      const existing = items.get(id);
+      if (existing && item.amount !== null) existing.amount += item.amount;
+      else if (!existing) items.set(id, { id, ...item });
     }
   }
 
   const combined = [...items.values()].map(item => {
     const amount = item.amount === null ? null : round(item.amount);
     const old = checked.get(item.id);
-    return { ...item, amount, done: Boolean(old?.done && old.amount === amount) };
-  }).sort((a, b) => a.name.localeCompare(b.name, 'is'));
+    return { ...item, amount, done: Boolean(old?.done && old.amount === amount),
+      ...(old?.excluded ? { excluded:true } : {}) };
+  });
+  combined.push(...[...checked.values()].filter(item => item.manual));
+  combined.sort((a, b) => a.name.localeCompare(b.name, 'is'));
   return { week, menu: menuSignature(meals), items: combined, missing: [...new Set(missing)] };
 }

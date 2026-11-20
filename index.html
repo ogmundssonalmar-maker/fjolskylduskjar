@@ -18,6 +18,11 @@
 .menu-week-toolbar{margin-bottom:16px}
 .menu-week-toolbar h2{font:500 22px Georgia,serif;margin:0;text-transform:none}
 .menu-week-toolbar .month-controls{flex-wrap:wrap}
+.menu-events{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:4px}
+.menu-events:empty{display:none}
+.menu-event.dayev{margin:0;font-size:11px;max-width:100%;overflow-wrap:anywhere;color:inherit}
+a.menu-event{text-decoration:none}
+a.menu-event:hover{text-decoration:underline}
 .month-grid,.month-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .month-days span{text-align:center;color:var(--muted);font-size:12px;font-weight:750;padding:4px 0 7px}
 .month-grid{border:1px solid var(--border);border-radius:12px;overflow:hidden;gap:1px;background:var(--border)}
@@ -76,6 +81,11 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 #shoppingList .check small{color:var(--muted)}
 #shoppingStatus,#shoppingMessage{margin:9px 0}
 .shopping-actions{margin-bottom:12px}
+.shopping-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.shopping-row .check{flex:1;min-width:0;border:0;overflow-wrap:anywhere}
+.shopping-row .outline{flex:none}
+#shoppingAdd{margin:0 0 10px}
+#excludedShopping summary{cursor:pointer;color:var(--muted);font-size:13px;padding:8px 0}
 #todoActions{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
 #todoActions h3{font-size:15px;margin:0 0 7px}
 #todoActions p{margin:6px 0}
@@ -131,7 +141,11 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     </div>
   </div>
   <div class="two">
-    <article class="card"><div id="menuAll"></div></article>
+    <article class="card">
+      <button class="outline" type="button" id="copyMenuWeek">Afrita úr fyrri viku</button>
+      <p class="help" id="copyMenuMessage" role="status" hidden></p>
+      <div id="menuAll"></div>
+    </article>
     <article class="card" aria-labelledby="shoppingHeading">
       <h2 id="shoppingHeading">Innkaupin</h2>
       <p class="help" id="shoppingStatus"></p>
@@ -139,7 +153,17 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
         <button class="solid" type="button" id="approveMenu">Samþykkja matseðil</button>
       </div>
       <p class="help" id="shoppingMessage" role="status" hidden></p>
-      <div id="shoppingList"></div>
+      <div id="shoppingReview" hidden>
+        <form class="newtask" id="shoppingAdd">
+          <input name="product" type="text" maxlength="180" required aria-label="Vara á innkaupalista" placeholder="T.d. 2 stk. epli">
+          <button type="submit">Bæta við</button>
+        </form>
+        <div id="shoppingList"></div>
+        <details id="excludedShopping" hidden>
+          <summary></summary>
+          <div id="excludedShoppingList"></div>
+        </details>
+      </div>
       <section id="todoActions" aria-labelledby="todoHeading" hidden>
         <h3 id="todoHeading">Microsoft To Do</h3>
         <p class="help" id="todoStatus"></p>
@@ -317,7 +341,7 @@ function mealForDay(day) {
 }
 let shopping=null;
 let tasks=load('family-tasks-v2',[]);
-function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}if(page==='journeys')refreshTripPlans();if(page==='food'&&version!==null){refreshWeekMenu();refreshTodo()}}
+function go(page){document.querySelectorAll('[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===page));window.scrollTo(0,0);if(page==='month'){renderMonth();refreshMonth()}if(page==='journeys')refreshTripPlans();if(page==='food'){refreshMenuCalendar();if(version!==null){refreshWeekMenu();refreshTodo()}}}
 document.querySelectorAll('#tabs button').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
 function overlaps(e,d){return e.start<=d&&e.end>=d}
 function prettyTime(e){return e.time||''}
@@ -352,10 +376,10 @@ function renderEvent(event, showTime = false, day = today) {
       ${xss(ownerLabels[owner] || typeLabel[event.type] || 'Viðburður')}</span></div>
     <div class="agenda-note">${xss(event.note || '')}</div></div></div>`;
 }
-function renderMonthEvent(event, day) {
+function renderMonthEvent(event, day, layout = 'month-event') {
   const owner = ownerFor(event);
   const link = eventLink(event);
-  const classes = 'month-event dayev ' + xss(event.type) + (owner ? ' owner-' + owner : '');
+  const classes = `${layout} dayev ${xss(event.type)}${owner ? ' owner-' + owner : ''}`;
   const label = xss(event.title + (owner ? ', ' + ownerLabels[owner] : ''));
   const time = eventTimeOnDay(event, day);
   const content = (time ? xss(time) + ' ' : '') + xss(event.title);
@@ -486,7 +510,7 @@ eventForm.addEventListener('submit', async event => {
     eventDialog.close();
     shownMonth = draft.date.slice(0, 7);
     selectedDay = draft.date;
-    monthCalendar.delete(shownMonth);
+    monthCalendar.clear();
     setEventWriteStatus('Viðburður vistaður í Google Calendar.');
     renderMonth();
     await Promise.all([refreshCalendar(), refreshMonth()]);
@@ -546,6 +570,9 @@ const menuWeekRange = document.getElementById('menuWeekRange');
 const previousMenuWeek = document.getElementById('previousMenuWeek');
 const currentMenuWeek = document.getElementById('currentMenuWeek');
 const nextMenuWeek = document.getElementById('nextMenuWeek');
+const copyMenuWeek = document.getElementById('copyMenuWeek');
+const copyMenuMessage = document.getElementById('copyMenuMessage');
+let copyingMenu = false;
 const monthNames = ['janúar','febrúar','mars','apríl','maí','júní','júlí','ágúst','september','október','nóvember','desember'];
 const menuUrl = week => '/api/household/menu?week=' + encodeURIComponent(week);
 
@@ -566,16 +593,60 @@ function selectMenuWeek(week) {
   menuVersion = null;
   meals = homeMenus[week] || localWeekMeals(week);
   shopping = null;
+  copyMenuMessage.hidden = true;
+  shoppingAdd.reset();
+  excludedShopping.open = false;
   setShoppingMessage('');
   setTodoMessage('');
   renderMeals();
   renderShopping();
   refreshWeekMenu();
+  if (menuPageIsOpen()) refreshMenuCalendar();
 }
 
 previousMenuWeek.addEventListener('click', () => selectMenuWeek(offsetDay(menuWeek, -7)));
 currentMenuWeek.addEventListener('click', () => selectMenuWeek(mondayFor(today)));
 nextMenuWeek.addEventListener('click', () => selectMenuWeek(offsetDay(menuWeek, 7)));
+
+function setCopyMenuMessage(message) {
+  copyMenuMessage.textContent = message;
+  copyMenuMessage.hidden = !message;
+}
+
+copyMenuWeek.addEventListener('click', async () => {
+  const week = menuWeek;
+  const sourceWeek = offsetDay(week, -7);
+  const shared = version !== null;
+  copyingMenu = true;
+  copyMenuWeek.disabled = true;
+  setCopyMenuMessage('Sæki matseðil fyrri viku …');
+  try {
+    let source = localWeekMeals(sourceWeek);
+    if (shared) {
+      const response = await fetch(menuUrl(sourceWeek), { cache:'no-store' });
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      if (data.meals.length === 7) source = data.meals;
+    }
+    if (week !== menuWeek || shared !== (version !== null)) return;
+    const count = meals.filter((meal, index) => meal.name === emptyMealName && source[index].name !== emptyMealName).length;
+    if (!count) {
+      setCopyMenuMessage('Engar máltíðir úr fyrri viku passa í auða daga.');
+      return;
+    }
+    const saved = await saveMenuChange(draft => {
+      draft.meals = draft.meals.map((meal, index) => meal.name === emptyMealName ? source[index] : meal);
+    });
+    if (week === menuWeek) setCopyMenuMessage(saved
+      ? (count === 1 ? 'Ein máltíð afrituð á auðan dag.' : `${count} máltíðir afritaðar á auða daga.`)
+      : 'Afritun mistókst. Reyndu aftur.');
+  } catch {
+    if (week === menuWeek) setCopyMenuMessage('Ekki náðist í matseðil fyrri viku. Reyndu aftur.');
+  } finally {
+    copyingMenu = false;
+    copyMenuWeek.disabled = menuSaving || (version !== null && menuVersion === null);
+  }
+});
 
 async function refreshWeekMenu({ whileEditing = false } = {}) {
   if (version === null || menuSaving || (mealDialog.open && !whileEditing)) return;
@@ -625,6 +696,7 @@ async function refreshCalendar() {
       : 'Sýni vistað afrit af dagskránni.';
     renderToday();
     renderMonth();
+    if (menuPageIsOpen()) renderMenuEvents();
   } catch {
     calendarStatus.textContent = 'Ekki náðist í Google Calendar.';
   }
@@ -783,6 +855,8 @@ function renderMeals() {
   currentMenuWeek.disabled = menuSaving || isCurrentWeek;
   nextMenuWeek.disabled = menuSaving;
   const editingDisabled = menuSaving || (version !== null && menuVersion === null);
+  copyMenuWeek.disabled = copyingMenu || editingDisabled;
+  copyMenuWeek.hidden = meals.every(meal => meal.name !== emptyMealName);
   document.getElementById('menuAll').innerHTML = meals.map((meal, index) => {
     const link = recipeUrl(meal.url);
     const title = link ? `<a href="${xss(link)}" target="_blank" rel="noopener noreferrer">${xss(meal.name)} ↗</a>` : xss(meal.name);
@@ -790,28 +864,59 @@ function renderMeals() {
       meal.minutes ? meal.minutes + ' mín.' : '',
       meal.ingredients?.length ? meal.ingredients.length + ' hráefni' : '',
     ].filter(Boolean).join(' · ');
-    const [,month,day] = offsetDay(menuWeek, index).split('-').map(Number);
+    const dayKey = offsetDay(menuWeek, index);
+    const [,month,day] = dayKey.split('-').map(Number);
     const date = `${day}.${month}.`;
     return `<div class="menu-row"><span style="font-size:12px;font-weight:800;color:var(--muted)">${xss(meal.day)} <small>${xss(date)}</small></span>
       <div><strong>${title}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}</div>
-      <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${meal.name === emptyMealName ? 'Skrá' : 'Breyta'}</button></div>`;
+      <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${meal.name === emptyMealName ? 'Skrá' : 'Breyta'}</button>
+      <div class="menu-events" data-menu-day="${dayKey}"></div></div>`;
   }).join('');
+  renderMenuEvents();
+}
+
+function renderMenuEvents() {
+  for (const element of document.querySelectorAll('[data-menu-day]')) {
+    const day = element.dataset.menuDay;
+    element.innerHTML = eventsOnMonthDay(day).map(event => renderMonthEvent(event, day, 'menu-event')).join('');
+  }
 }
 
 const menuApprove = document.getElementById('approveMenu');
 const shoppingStatus = document.getElementById('shoppingStatus');
 const shoppingMessage = document.getElementById('shoppingMessage');
+const shoppingReview = document.getElementById('shoppingReview');
+const shoppingAdd = document.getElementById('shoppingAdd');
 const shoppingList = document.getElementById('shoppingList');
+const excludedShopping = document.getElementById('excludedShopping');
+const excludedShoppingList = document.getElementById('excludedShoppingList');
+const shoppingNumber = new Intl.NumberFormat('is-IS', { maximumFractionDigits:3 });
 
 function setShoppingMessage(message) {
   shoppingMessage.textContent = message;
   shoppingMessage.hidden = !message;
 }
+function shoppingRow(item, disabled) {
+  const quantity = item.amount === null ? '' : shoppingNumber.format(item.amount) + ' ' + item.unit;
+  const name = `<span><b>${xss(item.name)}</b>${quantity ? ` <small>· ${xss(quantity)}</small>` : ''}</span>`;
+  const itemId = xss(item.id);
+  const control = disabled ? 'disabled' : '';
+  return `<div class="shopping-row">
+    ${item.excluded ? `<div class="check">${name}</div>` : `<label class="check ${item.done ? 'done' : ''}">
+      <input type="checkbox" data-shopping-id="${itemId}" ${item.done ? 'checked' : ''} ${control}>
+      ${name}</label>`}
+    <button type="button" class="outline" data-exclude-id="${itemId}" data-exclude="${!item.excluded}" ${control}
+      aria-label="${item.excluded ? 'Setja aftur á lista' : 'Taka af lista'} · ${xss(item.name)}">${item.excluded ? 'Setja aftur' : 'Taka af lista'}</button>
+    </div>`;
+}
+
 function renderShopping() {
   renderTodo();
   const menu = JSON.stringify(meals.map(({ name, ingredients = [] }) => [name, ...ingredients]));
   menuApprove.textContent = shopping ? 'Samþykkja og uppfæra lista' : 'Samþykkja matseðil';
-  menuApprove.disabled = menuSaving || (version !== null && menuVersion === null) || meals.every(meal => meal.name === emptyMealName);
+  const disabled = menuSaving || sendingTodo || (version !== null && menuVersion === null);
+  menuApprove.disabled = disabled || meals.every(meal => meal.name === emptyMealName);
+  shoppingReview.hidden = !shopping;
   if (!shopping) {
     shoppingStatus.textContent = version !== null && menuVersion === null ? 'Sæki matseðil vikunnar …'
       : 'Samþykktu matseðilinn til að sameina hráefnin á einn innkaupalista.';
@@ -822,13 +927,13 @@ function renderShopping() {
   shoppingStatus.textContent = shopping.menu === menu
     ? 'Samþykktur matseðill'
     : 'Matseðillinn hefur breyst. Samþykktu hann aftur til að uppfæra innkaupalistann.';
-  const sorted = [...shopping.items].sort((a, b) => Number(a.done) - Number(b.done));
-  shoppingList.innerHTML = sorted.map(item => {
-    const quantity = item.amount === null ? '' : new Intl.NumberFormat('is-IS', { maximumFractionDigits:3 }).format(item.amount) + ' ' + item.unit;
-    return `<label class="check ${item.done ? 'done' : ''}">
-      <input type="checkbox" data-shopping-id="${xss(item.id)}" ${item.done ? 'checked' : ''} ${menuSaving || menuVersion === null ? 'disabled' : ''}>
-      <span><b>${xss(item.name)}</b>${quantity ? ` <small>· ${xss(quantity)}</small>` : ''}</span></label>`;
-  }).join('') || '<p class="empty">Engin hráefni komin á listann.</p>';
+  for (const element of shoppingAdd.elements) element.disabled = disabled;
+  const listed = shopping.items.filter(item => !item.excluded).sort((a, b) => Number(a.done) - Number(b.done));
+  shoppingList.innerHTML = listed.map(item => shoppingRow(item, disabled)).join('') || '<p class="empty">Engar vörur á listanum.</p>';
+  const excluded = shopping.items.filter(item => item.excluded);
+  excludedShopping.hidden = !excluded.length;
+  excludedShopping.querySelector('summary').textContent = `Tekið af listanum (${excluded.length})`;
+  excludedShoppingList.innerHTML = excluded.map(item => shoppingRow(item, disabled)).join('');
   if (shopping.missing.length) {
     shoppingList.insertAdjacentHTML('beforeend', `<p class="help">Bættu við hráefnum fyrir: ${xss(shopping.missing.join(', '))}.</p>`);
   }
@@ -844,13 +949,31 @@ menuApprove.addEventListener('click', async () => {
   const saved = await saveMenuChange(draft => { draft.shoppingAction = { type:'approve' }; });
   setShoppingMessage(saved ? 'Innkaupalistinn var vistaður.' : 'Innkaupalistinn vistaðist ekki. Reyndu aftur.');
 });
+async function updateShopping(action, message = '') {
+  if (version === null || sendingTodo) return false;
+  const saved = await saveMenuChange(draft => { draft.shoppingAction = action; });
+  setShoppingMessage(saved ? message : 'Breytingin vistaðist ekki. Reyndu aftur.');
+  return saved;
+}
 shoppingList.addEventListener('change', async event => {
   const checkbox = event.target.closest('input[data-shopping-id]');
-  if (!checkbox || version === null) return;
-  const saved = await saveMenuChange(draft => {
-    draft.shoppingAction = { type:'toggle', id:checkbox.dataset.shoppingId, done:checkbox.checked };
-  });
-  setShoppingMessage(saved ? '' : 'Breytingin vistaðist ekki. Reyndu aftur.');
+  if (checkbox) await updateShopping({ type:'toggle', id:checkbox.dataset.shoppingId, done:checkbox.checked });
+});
+shoppingReview.addEventListener('click', async event => {
+  const button = event.target.closest('button[data-exclude-id]');
+  if (!button) return;
+  const excluded = button.dataset.exclude === 'true';
+  await updateShopping({ type:'exclude', id:button.dataset.excludeId, excluded },
+    excluded ? 'Vara tekin af listanum.' : 'Vara sett aftur á listann.');
+});
+shoppingAdd.addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = shoppingAdd.elements.product;
+  const line = input.value.trim();
+  if (line && await updateShopping({ type:'add', line }, 'Vöru bætt á listann.')) {
+    input.value = '';
+    input.focus();
+  }
 });
 
 const todoActions = document.getElementById('todoActions');
@@ -872,7 +995,7 @@ function renderTodo() {
   todoConnect.hidden = !todoState?.configured;
   todoConnect.textContent = todoState?.connected ? 'Tengja aftur' : 'Tengja reikning Oddnýjar';
   todoSend.hidden = !todoState?.list;
-  todoSend.disabled = sendingTodo || menuSaving || !shopping?.items.some(item => !item.done);
+  todoSend.disabled = sendingTodo || menuSaving || !shopping?.items.some(item => !item.done && !item.excluded);
   todoListForm.hidden = !todoState?.lists?.length || Boolean(todoState.list);
   todoStatus.textContent = todoState?.list ? 'Listi: ' + todoState.list
     : todoState?.connected ? 'Veldu sameiginlega innkaupalistann.'
@@ -937,7 +1060,7 @@ todoSend.addEventListener('click', async () => {
   if (sendingTodo) return;
   const week = menuWeek;
   sendingTodo = true;
-  renderTodo();
+  renderShopping();
   setTodoMessage('Sendi innkaupalistann …');
   try {
     const result = await todoRequest('/export', 'POST', { week });
@@ -950,7 +1073,7 @@ todoSend.addEventListener('click', async () => {
     if (week === menuWeek) setTodoMessage(error.message);
   } finally {
     sendingTodo = false;
-    renderTodo();
+    renderShopping();
   }
 });
 
@@ -1021,20 +1144,33 @@ function renderMonth() {
     .map(event => renderEvent(event, true, selectedDay)).join('') || '<p class="empty">Engir viðburðir skráðir.</p>';
 }
 
-async function refreshMonth() {
+function menuPageIsOpen() {
+  return document.querySelector('.page.active')?.dataset.page === 'food';
+}
+function menuMonths() {
+  return [...new Set([menuWeek.slice(0, 7), offsetDay(menuWeek, 6).slice(0, 7)])];
+}
+function refreshMenuCalendar() {
+  return Promise.all(menuMonths().map(refreshCalendarMonth));
+}
+function refreshMonth() {
+  return refreshCalendarMonth(shownMonth);
+}
+async function refreshCalendarMonth(month) {
   if (location.protocol !== 'https:' && location.protocol !== 'http:') return;
-  const month = shownMonth;
   const previous = monthCalendar.get(month);
   if (previous && Date.now() - previous.updated < 5 * 60000) return;
-  monthCalendar.set(month, { ...previous, updated: Date.now() });
+  const pending = { ...previous, updated: Date.now() };
+  monthCalendar.set(month, pending);
   try {
     const response = await fetch('/api/calendar?month=' + encodeURIComponent(month), { cache: 'no-store' });
     if (!response.ok) return;
     const data = await response.json();
-    if (!data.connected) return;
+    if (!data.connected || monthCalendar.get(month) !== pending) return;
     calendarCanWrite = data.canCreateEvents === true;
     monthCalendar.set(month, { updated: Date.now(), events: data.events });
     if (month === shownMonth) renderMonth();
+    if (menuPageIsOpen() && menuMonths().includes(month)) renderMenuEvents();
   } catch {
     // The saved schedule stays visible when Google Calendar is unavailable.
   }
@@ -1244,6 +1380,7 @@ if (location.protocol === 'https:' || location.protocol === 'http:') {
   setInterval(refreshCalendar, 5 * 60000);
   setInterval(() => {
     if (document.querySelector('.page.active')?.dataset.page === 'month') refreshMonth();
+    if (menuPageIsOpen()) refreshMenuCalendar();
   }, 5 * 60000);
 }
 </script></body></html>
