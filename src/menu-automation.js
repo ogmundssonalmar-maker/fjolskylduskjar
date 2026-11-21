@@ -1,5 +1,4 @@
 import { menuWeekExists, saveGeneratedMenu } from './household.js';
-import { importMeals } from './menu-import.js';
 import { weekStart } from './shopping.js';
 
 const maxOutputTokens = 3500;
@@ -20,11 +19,7 @@ export async function generateWeeklyDraft(env, scheduledTime) {
   next.setUTCDate(next.getUTCDate() + 7);
   const week = weekStart(next);
   if (await menuWeekExists(env.DB, week) || !await reserveGeneration(env.DB, week)) return;
-  const data = await requestMenuDraft(env, week);
-  await saveGeneratedMenu(env.DB, week, data);
-}
 
-async function requestMenuDraft(env, week) {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
     headers:{ Authorization:'Bearer ' + env.OPENAI_API_KEY, 'Content-Type':'application/json' },
@@ -48,32 +43,8 @@ async function requestMenuDraft(env, week) {
   try {
     const data = JSON.parse(output);
     if (!Array.isArray(data?.meals) || data.meals.length !== 7) throw new Error('Expected seven meals.');
-    return data;
+    await saveGeneratedMenu(env.DB, week, data);
   } catch {
-    throw new Error('Could not parse the generated menu.');
-  }
-}
-
-// Short-lived, one-use verification against the actual production secret.
-export async function verifyMenuDeployment(request, env) {
-  const respond = (result, status = 200) => Response.json(result, { status, headers:{ 'Cache-Control':'private, no-store' } });
-  const token = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get('Authorization') || '')?.[1];
-  if (request.method !== 'POST' || !token || Date.now() >= Date.parse('2026-11-21T23:10:23Z')) {
-    return respond({ error:'Not found.' }, 404);
-  }
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-  const digest = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-  if (digest !== '4dfd5e28e97eeac2f7f29389af5dfc7997076af91d671f3d657a0cc4a67d7bee') {
-    return respond({ error:'Not found.' }, 404);
-  }
-  if (!env.OPENAI_API_KEY || !env.OPENAI_MENU_MODEL || !env.DB) return respond({ error:'Missing runtime settings.' }, 503);
-  if (!await reserveGeneration(env.DB, 'deployment-check-2026-11-21')) return respond({ error:'Already tested.' }, 409);
-  try {
-    const week = '2026-11-23';
-    const data = await requestMenuDraft(env, week);
-    const meals = importMeals(data, week);
-    return respond({ verified:true, meals:meals.length, model:env.OPENAI_MENU_MODEL });
-  } catch (error) {
-    return respond({ error:error.message }, 502);
+    throw new Error('Could not validate or save the generated menu.');
   }
 }

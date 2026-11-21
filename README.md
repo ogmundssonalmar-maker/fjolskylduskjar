@@ -93,11 +93,9 @@ Veljið rétta viku undir **Matseðill → Flytja inn JSON**, límið gögnin in
 
 Workerinn er með `scheduled`-meðhöndlun. Hún notar Responses API og sama gagnapróf og JSON-innflutningur. Hún sendir almennar óskir um matseðil fyrir fjóra og mánudagsdagsetningu næstu viku. D1 leyfir að hámarki eina sjálfvirka API-beiðni fyrir hverja viku og beiðnin takmarkast við 3.500 úttakstóka. Keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu.
 
-Sjálfvirka keyrslan er óvirk. Áður en hún er virkjuð þarf að yfirfara eftirfarandi.
+Keyrslan á aðalútgáfunni er stillt á sunnudaga kl. 17:00 að íslenskum tíma og notar `gpt-5.4-mini`. `wrangler.toml` geymir tímasetninguna, `OPENAI_MENU_MODEL` og `WEEKLY_MENU_AUTOMATION_ENABLED`. `OPENAI_API_KEY` er Cloudflare Secret í **Runtime variables and secrets → Production**. Yfirfarið API-verð og prófið JSON-úttak þegar skipt er um líkan eða lykil.
 
-1. Velja líkan sem styður JSON-úttak í Responses API, fara yfir verð á inntaks- og úttakstókum og stilla kostnaðarviðvaranir fyrir OpenAI-verkefnið.
-2. Prófa JSON-úttak með því líkani og staðfesta í prófunarumhverfi að drögin þurfi samþykki fjölskyldunnar. Setja síðan `OPENAI_API_KEY` sem Cloudflare Secret og `OPENAI_MENU_MODEL` sem runtime-breytu fyrir rétt umhverfi.
-3. Virkja `WEEKLY_MENU_AUTOMATION_ENABLED` eftir yfirferð og setja `[triggers]` með `crons = ["0 17 * * SUN"]` í Worker-stillingar fyrir sunnudaga kl. 17:00 að íslenskum tíma. Ef sjálfvirk beiðni mistekst má vista drög með JSON-innflutningi. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur.
+Ef sjálfvirk beiðni mistekst má vista drög með JSON-innflutningi. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur. Til að gera keyrsluna óvirka skal stilla `WEEKLY_MENU_AUTOMATION_ENABLED` á `false`, setja `crons = []` undir `[triggers]` og gefa Workerinn aftur út.
 
 ### Microsoft To Do
 
