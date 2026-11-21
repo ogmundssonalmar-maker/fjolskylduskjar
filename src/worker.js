@@ -3,10 +3,13 @@ import { household } from './household.js';
 import { trips } from './trips.js';
 import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
-import { generateWeeklyDraft } from './menu-automation.js';
+import { generateWeeklyDraft, verifyMenuDeployment } from './menu-automation.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
-  const { pathname } = new URL(request.url);
+  const { pathname, hostname } = new URL(request.url);
+  if (pathname === '/api/_deployment/menu-check' && hostname === 'fjolskylduskjar.ogmundssonalmar.workers.dev') {
+    return verifyMenuDeployment(request, env);
+  }
   if (pathname === '/api/calendar' && request.method === 'GET') {
     return household(request, env);
   }
