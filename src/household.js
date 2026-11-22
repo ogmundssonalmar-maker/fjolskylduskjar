@@ -104,8 +104,7 @@ function writeWeeklyMenu(db, week, version, update) {
   return query.run();
 }
 
-export async function saveGeneratedMenu(db, week, data) {
-  const meals = importMeals(data, week);
+export async function saveGeneratedMenu(db, week, meals) {
   if (await menuWeekExists(db, week)) return false;
   const { meta } = await writeWeeklyMenu(db, week, 0, { meals, activeMeals:null, approvedAt:null, shopping:null });
   return Boolean(meta.changes);

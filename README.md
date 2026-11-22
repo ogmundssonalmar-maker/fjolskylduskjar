@@ -91,11 +91,11 @@ Veljið rétta viku undir **Matseðill → Flytja inn JSON**, límið gögnin in
 
 ### Vikuleg drög með OpenAI og Cron
 
-Workerinn er með `scheduled`-meðhöndlun. Hún notar Responses API og sama gagnapróf og JSON-innflutningur. Hún sendir almennar óskir um matseðil fyrir fjóra og mánudagsdagsetningu næstu viku. D1 leyfir að hámarki eina sjálfvirka API-beiðni fyrir hverja viku og beiðnin takmarkast við 3.500 úttakstóka. Keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu.
+Workerinn er með `scheduled`-meðhöndlun. Hún notar Responses API og biður um matseðil fyrir fjóra sem byrjar á mánudegi næstu viku. Áður en drög eru vistuð þarf hver eldaður réttur að hafa hráefni, fjóra skammta og tvö til þrjú eldunarskref. Afgangadagur og frjáls dagur eru valfrjálsir. D1 leyfir að hámarki eina sjálfvirka API-beiðni fyrir hverja viku og beiðnin takmarkast við 3.500 úttakstóka. Keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu.
 
 Keyrslan á aðalútgáfunni er stillt á sunnudaga kl. 17:00 að íslenskum tíma og notar `gpt-5.4-mini`. `wrangler.toml` geymir tímasetninguna, `OPENAI_MENU_MODEL` og `WEEKLY_MENU_AUTOMATION_ENABLED`. `OPENAI_API_KEY` er Cloudflare Secret í **Runtime variables and secrets → Production**. Yfirfarið API-verð og prófið JSON-úttak þegar skipt er um líkan eða lykil.
 
-Ef sjálfvirk beiðni mistekst má vista drög með JSON-innflutningi. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur. Til að gera keyrsluna óvirka skal stilla `WEEKLY_MENU_AUTOMATION_ENABLED` á `false`, setja `crons = []` undir `[triggers]` og gefa Workerinn aftur út.
+OpenAI semur uppskriftirnar í venjulegri keyrslu. Ef beiðnin mistekst eða leiðbeiningar vantar setur Workerinn saman varamatseðil með vistuðum hráefnalistum, eldunarskrefum og tenglum á Krónuuppskriftir. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur. Til að gera keyrsluna óvirka skal stilla `WEEKLY_MENU_AUTOMATION_ENABLED` á `false`, setja `crons = []` undir `[triggers]` og gefa Workerinn aftur út.
 
 ### Microsoft To Do
 
