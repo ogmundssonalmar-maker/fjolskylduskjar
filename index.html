@@ -78,8 +78,17 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .menu-dialog textarea{resize:vertical}
 .menu-card-actions,.shopping-item-actions{display:flex;flex-wrap:wrap;gap:5px}
 .shopping-item-actions .outline{padding:7px 8px}
-.menu-recipe summary{cursor:pointer;font-size:12px;color:var(--forest)}
-.menu-recipe p{white-space:pre-line;overflow-wrap:anywhere;margin:5px 0}
+.menu-row .meal-open{grid-column:1/3;display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:14px;text-align:left;padding:7px 0;border:0;background:transparent;color:var(--forest);font:inherit;overflow-wrap:anywhere}
+.menu-row .meal-open:hover:not(:disabled){background:var(--mint)}
+.menu-row .meal-open:disabled{color:var(--muted);cursor:default}
+.meal-open .meal-day{font-size:12px;font-weight:800;color:var(--muted)}
+@media(max-width:650px){.menu-row .meal-open{grid-template-columns:41px minmax(0,1fr) auto;gap:9px}}
+#recipeDialog h2{margin-bottom:4px;overflow-wrap:anywhere}
+#recipeDialog h3{font-size:15px;margin:14px 0 5px}
+#recipeDialog ul{margin:0;padding-left:20px;overflow-wrap:anywhere}
+#recipeInstructions{white-space:pre-line;overflow-wrap:anywhere;margin:0}
+#recipeSource{display:inline-block;margin-top:14px}
+#closeRecipeDialog{margin-top:16px}
 #menuStage{margin:5px 0 9px}
 .menu-draft-link{display:inline-block;margin:4px 0 12px;color:var(--forest);font-weight:650;text-decoration:none}
 .menu-draft-link:hover{text-decoration:underline}
@@ -256,6 +265,22 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       <button class="solid" type="submit" id="tripSubmit">Vista ferð</button>
     </div>
   </form>
+</dialog>
+<dialog class="menu-dialog" id="recipeDialog" aria-labelledby="recipeHeading">
+  <p class="help" id="recipeDate"></p>
+  <h2 id="recipeHeading"></h2>
+  <p class="help" id="recipeDetails" hidden></p>
+  <section id="recipeIngredientsSection" hidden>
+    <h3>Hráefni</h3>
+    <ul id="recipeIngredients"></ul>
+  </section>
+  <section id="recipeInstructionsSection" hidden>
+    <h3>Leiðbeiningar</h3>
+    <p id="recipeInstructions"></p>
+  </section>
+  <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden>Opna uppskrift á vefnum ↗</a>
+  <p class="help" id="recipeEmpty" hidden>Uppskrift er óskráð fyrir þessa máltíð.</p>
+  <div><button class="outline" type="button" id="closeRecipeDialog" autofocus>Loka</button></div>
 </dialog>
 <dialog class="menu-dialog" id="mealDialog" aria-labelledby="mealDialogHeading">
   <form id="mealForm">
@@ -874,6 +899,7 @@ async function addTask() {
 }
 
 const mealDialog = document.getElementById('mealDialog');
+const recipeDialog = document.getElementById('recipeDialog');
 const mealForm = document.getElementById('mealForm');
 const mealDialogStatus = document.getElementById('mealDialogStatus');
 const mealSubmit = document.getElementById('mealSubmit');
@@ -882,7 +908,7 @@ const shoppingPriceDialog = document.getElementById('shoppingPriceDialog');
 let mealIndex;
 
 function menuDialogIsOpen() {
-  return mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
+  return recipeDialog.open || mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
 }
 
 function editMeal(index) {
@@ -974,7 +1000,47 @@ const menuStageLabel = document.getElementById('menuStage');
 const menuSyncUnlock = document.getElementById('menuSyncUnlock');
 const homeDraftLink = document.getElementById('homeDraftLink');
 const menuDraftLink = document.getElementById('menuDraftLink');
+const menuMeals = document.getElementById('menuAll');
 menuSyncUnlock.addEventListener('click', () => syncUnlock.click());
+
+function openMealRecipe(index) {
+  const meal = meals[index];
+  if (!meal || meal.name === emptyMealName) return;
+  const [, month, day] = offsetDay(menuWeek, index).split('-').map(Number);
+  document.getElementById('recipeDate').textContent = `${meal.day} ${day}. ${monthNames[month - 1]}`;
+  document.getElementById('recipeHeading').textContent = meal.name;
+  const details = [meal.recipe?.title === meal.name ? '' : meal.recipe?.title,
+    meal.minutes ? `${meal.minutes} mín.` : '', meal.recipe?.servings ? `${meal.recipe.servings} skammtar` : ''].filter(Boolean);
+  const detail = document.getElementById('recipeDetails');
+  detail.textContent = details.join(' · ');
+  detail.hidden = !details.length;
+
+  const ingredients = meal.ingredients || [];
+  document.getElementById('recipeIngredientsSection').hidden = !ingredients.length;
+  const ingredientList = document.getElementById('recipeIngredients');
+  ingredientList.replaceChildren(...ingredients.map(ingredient => {
+    const item = document.createElement('li');
+    item.textContent = ingredient;
+    return item;
+  }));
+
+  const instructions = meal.recipe?.instructions;
+  document.getElementById('recipeInstructionsSection').hidden = !instructions;
+  document.getElementById('recipeInstructions').textContent = instructions || '';
+  const link = recipeUrl(meal.url);
+  const source = document.getElementById('recipeSource');
+  source.hidden = !link;
+  if (link) source.href = link;
+  else source.removeAttribute('href');
+  document.getElementById('recipeEmpty').hidden = Boolean(ingredients.length || instructions || link);
+  recipeDialog.showModal();
+}
+
+menuMeals.addEventListener('click', event => {
+  const button = event.target.closest('button[data-recipe-index]');
+  if (button) openMealRecipe(Number(button.dataset.recipeIndex));
+});
+document.getElementById('closeRecipeDialog').addEventListener('click', () => recipeDialog.close());
 
 function renderDraftLinks() {
   const links = [[homeDraftLink, draftWeeks.at(-1)], [menuDraftLink, draftWeeks.find(week => week !== menuWeek)]];
@@ -1013,9 +1079,8 @@ function renderMeals() {
   renderDraftLinks();
   copyMenuWeek.disabled = copyingMenu || editingDisabled;
   copyMenuWeek.hidden = meals.every(meal => meal.name !== emptyMealName);
-  document.getElementById('menuAll').innerHTML = meals.map((meal, index) => {
-    const link = recipeUrl(meal.url);
-    const title = link ? `<a href="${xss(link)}" target="_blank" rel="noopener noreferrer">${xss(meal.name)} ↗</a>` : xss(meal.name);
+  menuMeals.innerHTML = meals.map((meal, index) => {
+    const registered = meal.name !== emptyMealName;
     const detail = [
       meal.minutes ? meal.minutes + ' mín.' : '',
       meal.ingredients?.length ? meal.ingredients.length + ' hráefni' : '',
@@ -1024,10 +1089,13 @@ function renderMeals() {
     const dayKey = offsetDay(menuWeek, index);
     const [,month,day] = dayKey.split('-').map(Number);
     const date = `${day}.${month}.`;
-    return `<div class="menu-row"><span style="font-size:12px;font-weight:800;color:var(--muted)">${xss(meal.day)} <small>${xss(date)}</small></span>
-      <div><strong>${title}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}
-        ${meal.recipe?.instructions ? `<details class="menu-recipe"><summary>${xss(meal.recipe.title)}</summary><p>${xss(meal.recipe.instructions)}</p></details>` : ''}</div>
-      <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${meal.name === emptyMealName ? 'Skrá' : 'Breyta'}</button>
+    return `<div class="menu-row">
+      <button class="meal-open" type="button" aria-haspopup="dialog" data-recipe-index="${index}" ${registered ? '' : 'disabled'}>
+        <span class="meal-day">${xss(meal.day)} <small>${xss(date)}</small></span>
+        <span><strong>${xss(meal.name)}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}</span>
+        ${registered ? '<span aria-hidden="true">›</span>' : ''}
+      </button>
+      <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${registered ? 'Breyta' : 'Skrá'}</button>
       <div class="menu-events" data-menu-day="${dayKey}"></div></div>`;
   }).join('');
   renderMenuEvents();

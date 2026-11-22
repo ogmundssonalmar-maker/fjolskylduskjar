@@ -30,7 +30,8 @@ export async function generateWeeklyDraft(env, scheduledTime) {
       text:{ format:{ type:'json_object' } },
       input:`Return JSON for an Icelandic meal plan for four, with week set to ${week} and a meals array of seven dinners. ` +
         'Use objects with date (YYYY-MM-DD, consecutive starting on week), name, minutes (integer), and ingredients ' +
-        '(Icelandic strings with quantities). Optional recipe has title, servings (integer), and brief instructions. ' +
+        '(Icelandic strings with quantities). For every dinner that needs cooking, include a recipe object with title, ' +
+        'servings (integer), and instructions (one string with 2–3 short, practical steps in Icelandic). ' +
         'Use ordinary ingredients, include some quick dinners, and leave out prices and external URLs.',
     }),
     signal:AbortSignal.timeout(45000),
