@@ -180,11 +180,14 @@ async function weeklyMenu(request, db, week) {
     const current = weekStart();
     const next = new Date(current);
     next.setUTCDate(next.getUTCDate() + 7);
-    const weeks = [...new Set([week, current, weekStart(next)])];
+    const nearby = [current, weekStart(next)];
+    const weeks = [...new Set([week, ...nearby])];
     const menus = await readWeeklyMenus(db, weeks);
     const stage = menus[week];
+    const draftWeeks = nearby.filter(key => menuState(menus[key]) !== 'active' &&
+      menus[key].meals.some(meal => meal.name !== emptyMealName));
     return response({ week, ...stage, status:menuState(stage),
-      home:Object.fromEntries(weeks.map(key => [key, menus[key].activeMeals])) });
+      home:Object.fromEntries(weeks.map(key => [key, menus[key].activeMeals])), draftWeeks });
   }
   if (!['PUT', 'POST'].includes(request.method)) return response({ error: 'Aðferð óheimil.' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin ||

@@ -4,6 +4,7 @@ import test from 'node:test';
 import { household, readApprovedShopping } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
 import { generateWeeklyDraft } from '../src/menu-automation.js';
+import { weekStart } from '../src/shopping.js';
 import worker from '../src/worker.js';
 
 function testD1(t) {
@@ -510,6 +511,33 @@ test('scheduled generation is opt-in, calls OpenAI once per week, and can only w
   assert.equal(state.shopping, null);
   await generateWeeklyDraft(env, scheduledTime);
   assert.equal(openai.mock.callCount(), 1);
+});
+
+test('the current week response shows upcoming drafts to authenticated household members', async t => {
+  const DB = testD1(t);
+  const current = weekStart();
+  const next = new Date(current);
+  next.setUTCDate(next.getUTCDate() + 7);
+  const nextWeek = weekStart(next);
+  const base = 'https://example.com';
+  const menuPath = week => `${base}/api/household/menu?week=${week}`;
+  const headers = { Origin:base, 'Content-Type':'application/json' };
+  const data = { week:nextWeek, meals:[{ date:nextWeek, name:'Súpa', ingredients:['500 g tómatar'] }] };
+  const future = await household(new Request(menuPath(nextWeek), {
+    method:'POST', headers, body:JSON.stringify({ version:0, data }),
+  }), { DB });
+  assert.equal(future.status, 200);
+  const viewCurrent = async () => (await household(new Request(menuPath(current)), { DB })).json();
+  assert.deepEqual((await viewCurrent()).draftWeeks, [nextWeek]);
+  const denied = await worker.fetch(new Request(menuPath(current)), { DB });
+  assert.equal(denied.status, 403);
+  assert.doesNotMatch(await denied.text(), /draftWeeks/);
+
+  const approved = await household(new Request(menuPath(nextWeek), {
+    method:'PUT', headers, body:JSON.stringify({ ...await future.json(), shoppingAction:{ type:'approve' } }),
+  }), { DB });
+  assert.equal(approved.status, 200);
+  assert.deepEqual((await viewCurrent()).draftWeeks, []);
 });
 
 test('Microsoft To Do connects an owned shared list and exports shopping without duplicate tasks', async t => {

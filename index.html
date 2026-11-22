@@ -81,6 +81,8 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .menu-recipe summary{cursor:pointer;font-size:12px;color:var(--forest)}
 .menu-recipe p{white-space:pre-line;overflow-wrap:anywhere;margin:5px 0}
 #menuStage{margin:5px 0 9px}
+.menu-draft-link{display:inline-block;margin:4px 0 12px;color:var(--forest);font-weight:650;text-decoration:none}
+.menu-draft-link:hover{text-decoration:underline}
 #shoppingList .check{cursor:pointer}
 #shoppingList .check b{font-weight:650}
 #shoppingList .check small{color:var(--muted)}
@@ -110,7 +112,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
  <article class="card"><div class="section-head"><div><h2>Fram undan</h2><p class="sub">Helstu dagsetningar og það sem þarf að undirbúa.</p></div><button class="textbutton" onclick="go('month')">Allt dagatal ↗</button></div><div id="importantEvents"></div></article>
  </div><div class="stack">
  <article class="card"><div class="section-head"><div><h2>Þarf að muna</h2><p class="sub">Sameiginleg verkefni og undirbúningur.</p></div><button class="textbutton" onclick="go('todos')">Öll verkefni ↗</button></div><div id="tasksMini"></div></article>
- <article class="card"><div class="section-head"><h2>Hvað er í matinn?</h2><button class="textbutton" onclick="go('food')">Vikumatseðill ↗</button></div><div id="dinnerToday"></div><div id="nextDinners"></div><div class="links"><a href="https://kronan.is/uppskriftir" target="_blank" rel="noopener noreferrer">Uppskriftir Krónunnar ↗</a></div></article>
+ <article class="card"><div class="section-head"><h2>Hvað er í matinn?</h2><button class="textbutton" onclick="go('food')">Vikumatseðill ↗</button></div><a id="homeDraftLink" class="menu-draft-link" hidden></a><div id="dinnerToday"></div><div id="nextDinners"></div><div class="links"><a href="https://kronan.is/uppskriftir" target="_blank" rel="noopener noreferrer">Uppskriftir Krónunnar ↗</a></div></article>
  </div></div>
 </section>
 <section class="page" data-page="month">
@@ -145,9 +147,11 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       <button class="outline" type="button" id="nextMenuWeek">Næsta vika →</button>
     </div>
   </div>
+  <a id="menuDraftLink" class="menu-draft-link" hidden></a>
   <div class="two">
     <article class="card">
       <p class="help" id="menuStage" role="status"></p>
+      <button class="outline" type="button" id="menuSyncUnlock" hidden>Virkja samstillingu</button>
       <div class="menu-card-actions">
         <button class="outline" type="button" id="copyMenuWeek">Afrita úr fyrri viku</button>
         <button class="outline" type="button" id="openMenuImport">Flytja inn JSON</button>
@@ -374,6 +378,8 @@ let menuWeek = mondayFor(today);
 let followsCurrentWeek = true;
 let menuVersion = null;
 let menuStage = 'draft';
+let menuLoadFailed = false;
+let draftWeeks = [];
 let menuSaving = false;
 let menuRequestId = 0;
 let homeMenus = {};
@@ -580,6 +586,8 @@ async function refreshShared() {
       menuRequestId++;
       menuVersion = null;
       menuStage = 'draft';
+      menuLoadFailed = false;
+      draftWeeks = [];
       homeMenus = {};
       meals = localWeekMeals(menuWeek);
       shopping = null;
@@ -636,6 +644,7 @@ function selectMenuWeek(week) {
   followsCurrentWeek = week === mondayFor(today);
   menuVersion = null;
   menuStage = 'draft';
+  menuLoadFailed = false;
   meals = localWeekMeals(week);
   shopping = null;
   copyMenuMessage.hidden = true;
@@ -702,6 +711,9 @@ async function refreshWeekMenu({ whileEditing = false } = {}) {
     const state = await response.json();
     if (requestId !== menuRequestId || menuSaving || version === null || (menuDialogIsOpen() && !whileEditing)) return;
     homeMenus = state.home;
+    draftWeeks = state.draftWeeks || [];
+    menuLoadFailed = false;
+    renderDraftLinks();
     if (state.version !== menuVersion) {
       menuVersion = state.version;
       menuStage = state.status;
@@ -709,14 +721,13 @@ async function refreshWeekMenu({ whileEditing = false } = {}) {
       shopping = state.shopping;
       renderMeals();
       renderShopping();
-      if (shoppingMessage.dataset.loadError) setShoppingMessage('');
-      delete shoppingMessage.dataset.loadError;
     }
     renderToday();
   } catch {
     if (requestId !== menuRequestId || menuVersion !== null) return;
-    shoppingMessage.dataset.loadError = 'true';
-    setShoppingMessage('Ekki náðist í matseðil vikunnar. Reynt verður aftur.');
+    menuLoadFailed = true;
+    renderMeals();
+    renderShopping();
   }
 }
 
@@ -826,6 +837,7 @@ async function saveMenuChange(change, { importData, reportError = () => {} } = {
     meals = saved.meals;
     shopping = saved.shopping;
     homeMenus[menuWeek] = saved.activeMeals;
+    if (menuStage === 'active') draftWeeks = draftWeeks.filter(week => week !== menuWeek);
     syncStatus.textContent = 'Verkefni og matseðill samstillt milli tækja.';
     return true;
   } catch {
@@ -959,6 +971,22 @@ menuImportForm.addEventListener('submit', async event => {
 });
 
 const menuStageLabel = document.getElementById('menuStage');
+const menuSyncUnlock = document.getElementById('menuSyncUnlock');
+const homeDraftLink = document.getElementById('homeDraftLink');
+const menuDraftLink = document.getElementById('menuDraftLink');
+menuSyncUnlock.addEventListener('click', () => syncUnlock.click());
+
+function renderDraftLinks() {
+  const links = [[homeDraftLink, draftWeeks.at(-1)], [menuDraftLink, draftWeeks.find(week => week !== menuWeek)]];
+  for (const [link, week] of links) {
+    link.hidden = !week;
+    if (week) {
+      link.href = '?vika=' + encodeURIComponent(week);
+      link.textContent = 'Skoða drög fyrir ' + menuWeekLabel(week) + ' →';
+    }
+  }
+}
+
 function renderMeals() {
   const isCurrentWeek = menuWeek === mondayFor(today);
   const range = menuWeekLabel(menuWeek);
@@ -968,9 +996,21 @@ function renderMeals() {
   nextMenuWeek.disabled = menuSaving;
   const editingDisabled = menuSaving || (version !== null && menuVersion === null);
   menuImportOpen.disabled = editingDisabled;
-  menuStageLabel.textContent = menuStage === 'active' ? 'Virkur matseðill'
-    : menuStage === 'active_with_draft' ? 'Drög að breytingum · fyrri útgáfa er virk'
-      : 'Drög · bíða samþykkis';
+  menuSyncUnlock.hidden = version !== null;
+  if (version === null) {
+    menuStageLabel.textContent = 'Virkjaðu samstillingu til að sjá sameiginleg drög og samþykktan matseðil.';
+  } else if (menuLoadFailed) {
+    menuStageLabel.textContent = 'Ekki náðist í matseðil vikunnar. Reyni aftur innan skamms.';
+  } else if (menuVersion === null) {
+    menuStageLabel.textContent = 'Sæki matseðil vikunnar …';
+  } else if (meals.every(meal => meal.name === emptyMealName)) {
+    menuStageLabel.textContent = 'Engar máltíðir skráðar í valinni viku.';
+  } else {
+    menuStageLabel.textContent = menuStage === 'active' ? 'Virkur matseðill'
+      : menuStage === 'active_with_draft' ? 'Drög að breytingum · fyrri útgáfa er virk'
+        : 'Drög · bíða samþykkis';
+  }
+  renderDraftLinks();
   copyMenuWeek.disabled = copyingMenu || editingDisabled;
   copyMenuWeek.hidden = meals.every(meal => meal.name !== emptyMealName);
   document.getElementById('menuAll').innerHTML = meals.map((meal, index) => {
@@ -1040,10 +1080,11 @@ function renderShopping() {
   renderTodo();
   menuApprove.textContent = shopping ? 'Samþykkja og uppfæra lista' : 'Samþykkja matseðil';
   const disabled = menuSaving || sendingTodo || (version !== null && menuVersion === null);
-  menuApprove.disabled = disabled || meals.every(meal => meal.name === emptyMealName);
+  menuApprove.hidden = version === null || meals.every(meal => meal.name === emptyMealName);
+  menuApprove.disabled = disabled;
   shoppingReview.hidden = !shopping;
   if (!shopping) {
-    shoppingStatus.textContent = version !== null && menuVersion === null ? 'Sæki matseðil vikunnar …'
+    shoppingStatus.textContent = menuApprove.hidden ? 'Innkaupalistinn birtist með samþykktum matseðli.'
       : 'Samþykktu matseðilinn til að sameina hráefnin á einn innkaupalista.';
     shoppingList.innerHTML = '';
     return;
@@ -1518,7 +1559,16 @@ tripList.addEventListener('click', async event => {
   }
 });
 renderShared();renderMonth();renderSchool();renderTrips();
-const todoReturn = new URL(location.href).searchParams.get('todo');
+const pageUrl = new URL(location.href);
+const requestedMenuWeek = pageUrl.searchParams.get('vika');
+if (/^20\d{2}-\d{2}-\d{2}$/.test(requestedMenuWeek || '')) {
+  const date = dateOf(requestedMenuWeek);
+  if (Number.isFinite(date.valueOf()) && iso(date) === requestedMenuWeek && date.getUTCDay() === 1) {
+    selectMenuWeek(requestedMenuWeek);
+    go('food');
+  }
+}
+const todoReturn = pageUrl.searchParams.get('todo');
 if (todoReturn) {
   const currentUrl = new URL(location.href);
   currentUrl.searchParams.delete('todo');
