@@ -5,12 +5,12 @@ import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
 import { generateWeeklyDraft } from './menu-automation.js';
 
-// Short-lived, read-only check of the recipe reported by the household.
+// Short-lived check and narrowly scoped correction of the reported recipe.
 async function verifyRecipeContent(request, env) {
   const headers = { 'Cache-Control':'private, no-store' };
   const respond = (body, status = 200) => Response.json(body, { status, headers });
   const token = /^Bearer ([0-9a-f]{64})$/.exec(request.headers.get('Authorization') || '')?.[1];
-  if (request.method !== 'GET' || !token || Date.now() >= Date.parse('2026-11-22T01:48:00+00:00')) {
+  if (!['GET', 'POST'].includes(request.method) || !token || Date.now() >= Date.parse('2026-11-22T01:48:00+00:00')) {
     return respond({ error:'Not found.' }, 404);
   }
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -19,7 +19,29 @@ async function verifyRecipeContent(request, env) {
   const url = new URL('/api/household/menu?week=2026-11-23', request.url);
   const result = await household(new Request(url), env);
   if (!result.ok) return respond({ error:'Recipe lookup failed.' }, 502);
-  const { week, status, meals } = await result.json();
+  const { week, status, meals, version } = await result.json();
+  if (request.method === 'POST') {
+    const meal = meals.find(item => item.day === 'Þri' && item.name === 'Kjúklingapanna með grænmeti og hrísgrjónum');
+    if (!meal) return respond({ error:'The reported dish was not found.' }, 409);
+    if (meal.recipe?.instructions) return respond({ outcome:'already_present', status, week });
+    meal.recipe = {
+      title:meal.name,
+      servings:4,
+      ...meal.recipe,
+      instructions:[
+        '1. Sjóðið hrísgrjónin samkvæmt leiðbeiningum á pakkanum. Geymið þau heit.',
+        '2. Skerið kjúklinginn og grænmetið í hæfilega bita. Brúnið kjúklinginn í olíu á heitri pönnu. Bætið grænmetinu út í og steikið þar til það mýkist.',
+        '3. Bætið kryddi og sósuhráefnunum af listanum út í eftir smekk. Eldið áfram þar til kjúklingurinn nær 74 °C í kjarna. Berið pönnuna fram með hrísgrjónunum.',
+      ].join('\n\n'),
+    };
+    const update = await household(new Request(url, { method:'PUT',
+      headers:{ Origin:url.origin, 'Content-Type':'application/json' },
+      body:JSON.stringify({ version, meals }),
+    }), env);
+    if (!update.ok) return respond({ error:'Recipe correction failed.' }, update.status);
+    const saved = await update.json();
+    return respond({ outcome:'updated', status:saved.status, week });
+  }
   const matching = meals.filter(meal => /kjúkling/i.test(meal.name));
   return respond({ week, status, meals:matching.map(meal => ({
     day:meal.day, name:meal.name, ingredientCount:meal.ingredients?.length || 0,
@@ -29,7 +51,7 @@ async function verifyRecipeContent(request, env) {
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
   const { pathname, hostname } = new URL(request.url);
-  if (pathname === '/api/_deployment/recipe-check' && hostname === 'fjolskylduskjar.ogmundssonalmar.workers.dev') {
+  if (pathname === '/api/_deployment/recipe-repair' && hostname === 'fjolskylduskjar.ogmundssonalmar.workers.dev') {
     return verifyRecipeContent(request, env);
   }
   if (pathname === '/api/calendar' && request.method === 'GET') {
