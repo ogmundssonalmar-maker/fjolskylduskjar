@@ -8,7 +8,7 @@ import { refreshKronanDraft } from './kronan-draft-update.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
   const { pathname } = new URL(request.url);
-  if (pathname === '/api/_deployment/kronan-draft') return refreshKronanDraft(request, env);
+  if (pathname === '/api/_deployment/kronan-library') return refreshKronanDraft(request, env);
   if (pathname === '/api/calendar' && request.method === 'GET') {
     return household(request, env);
   }
