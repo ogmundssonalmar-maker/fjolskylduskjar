@@ -1,4 +1,5 @@
 import { defaultRecipes } from './kronan-default-recipes.js';
+import { validIngredientLines, validMinutes, validRecipe } from './menu-import.js';
 import { scaleIngredient } from './shopping.js';
 
 function recipeSlug(link) {
@@ -28,6 +29,26 @@ async function readRecipe(slug) {
     if (data.id === 1 && !data.result?.isError && recipe) return recipe;
   }
   return null;
+}
+
+export async function fetchKronanDinner(slug) {
+  const recipe = await readRecipe(slug);
+  if (!recipe || recipe.servings !== 4 || recipeSlug(recipe.recipeButton?.url) !== slug) return null;
+
+  const sourceLines = recipe.ingredientGroups?.flatMap(group => group.ingredients || []);
+  if (!sourceLines?.length || !validIngredientLines(sourceLines)) return null;
+  const groups = recipe.stepGroups || [];
+  const steps = groups.flatMap(group => group.steps || []);
+  if (steps.length < 2 || steps.some(step => typeof step?.text !== 'string' || !step.text.trim())) return null;
+
+  const instructions = groups.map(group => {
+    const lines = (group.steps || []).map(({ text }, index) => `${index + 1}. ${text.trim()}`);
+    return [group.name, ...lines].filter(Boolean).join('\n');
+  }).filter(Boolean).join('\n\n');
+  const details = { title:recipe.name, servings:recipe.servings, instructions };
+  if (!validRecipe(details)) return null;
+  return { name:recipe.name, minutes:validMinutes(recipe.totalMinutes) ? recipe.totalMinutes : null,
+    url:recipe.recipeButton.url, ingredients:sourceLines, recipe:details, source:'Krónan' };
 }
 
 export async function fillKronanIngredients(meals) {

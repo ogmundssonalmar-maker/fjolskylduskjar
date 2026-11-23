@@ -482,75 +482,110 @@ test('JSON imports and meal edits stay private drafts until approval while price
   assert.equal(state.shopping.items.find(item => item.id === pasta.id).price, null);
 });
 
-test('scheduled generation is opt-in, calls OpenAI once per week, and can only write a draft into an empty week', async t => {
+function kronanDinnerResponse(slug) {
+  return Response.json({ id:1, result:{ structuredContent:{ recipe:{ name:slug, totalMinutes:30, servings:4,
+    recipeButton:{ url:`https://kronan.is/uppskriftir/${slug}` }, ingredientGroups:[{ ingredients:['500 g gulrætur'] }],
+    stepGroups:[{ name:'Súpa', steps:[{ text:'Skerið gulræturnar niður.' }, { text:'Sjóðið þær og maukið.' }] }],
+  } } } });
+}
+
+const selectionResponse = slugs => Response.json({ status:'completed', output:[{
+  content:[{ type:'output_text', text:JSON.stringify({ slugs }) }],
+}] });
+
+test('scheduled selection writes only verified Krónan recipes into an empty draft and runs once per week', async t => {
   const DB = testD1(t);
   const env = { DB, OPENAI_API_KEY:'test-key', OPENAI_MENU_MODEL:'test-model' };
   const scheduledTime = Date.parse('2026-12-06T17:00:00Z');
   const week = '2026-12-07';
-  const data = { week, meals:Array.from({ length:7 }, (_, index) => ({
-    date:`2026-12-${String(7 + index).padStart(2, '0')}`, name:'Súpa', minutes:20, ingredients:['500 g gulrætur'],
-    recipe:{ title:'Gulrótarsúpa', servings:4, steps:['Skerið gulræturnar niður.', 'Sjóðið þær og maukið.'] },
-  })) };
-  data.meals[6] = { ...data.meals[6], name:'Frjáls dagur', minutes:0, ingredients:[], recipe:null };
-  const openai = t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(url, 'https://api.openai.com/v1/responses');
-    assert.equal(options.headers.Authorization, 'Bearer test-key');
+  const selected = ['plokkfiskur', 'pinsa', 'graenmetissupa', 'carbonara', 'lax_saetkartoflu', 'hakk_spaghetti', 'alfredo'];
+  const lookups = [];
+  let openaiCalls = 0;
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
     const body = JSON.parse(options.body);
+    if (url === 'https://kronan.is/api/v3/mcp') {
+      assert.equal(body.params.name, 'fetch_recipe');
+      const { slug } = body.params.arguments;
+      lookups.push(slug);
+      return kronanDinnerResponse(slug);
+    }
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    openaiCalls++;
+    assert.equal(options.headers.Authorization, 'Bearer test-key');
     assert.equal(body.store, false);
     assert.equal(body.model, 'test-model');
-    assert.equal(body.max_output_tokens, 3500);
+    assert.equal(body.max_output_tokens, 500);
     assert.equal(body.text.format.type, 'json_schema');
     assert.equal(body.text.format.strict, true);
+    assert.ok(selected.every(slug => body.text.format.schema.properties.slugs.items.enum.includes(slug)));
     assert.match(body.input, /2026-12-07/);
-    return Response.json({ status:'completed', output:[{ content:[{ type:'output_text', text:JSON.stringify(data) }] }] });
+    return selectionResponse(selected);
   });
   await generateWeeklyDraft(env, scheduledTime);
-  assert.equal(openai.mock.callCount(), 0);
+  assert.equal(fetchMock.mock.callCount(), 0);
   env.WEEKLY_MENU_AUTOMATION_ENABLED = 'true';
   await Promise.all([generateWeeklyDraft(env, scheduledTime), generateWeeklyDraft(env, scheduledTime)]);
-  assert.equal(openai.mock.callCount(), 1);
+  assert.equal(openaiCalls, 1);
+  assert.deepEqual(lookups.slice(0, 7), selected);
   const request = new Request('https://example.com/api/household/menu?week=' + week);
   const state = await (await household(request, env)).json();
   assert.equal(state.status, 'draft');
-  assert.equal(state.meals[0].name, 'Súpa');
-  assert.equal(state.meals[0].source, 'Samsett fyrir fjölskylduskjáinn með OpenAI');
-  assert.equal(state.meals[0].recipe.instructions, '1. Skerið gulræturnar niður.\n\n2. Sjóðið þær og maukið.');
-  assert.equal(state.meals[6].recipe, undefined);
+  assert.deepEqual(state.meals.map(meal => meal.name), selected);
+  assert.equal(state.meals[0].url, 'https://kronan.is/uppskriftir/plokkfiskur');
+  assert.equal(state.meals[0].source, 'Krónan');
+  assert.deepEqual(state.meals[0].ingredients, ['500 g gulrætur']);
+  assert.equal(state.meals[0].recipe.instructions, 'Súpa\n1. Skerið gulræturnar niður.\n2. Sjóðið þær og maukið.');
+  assert.equal(state.meals[6].recipe.servings, 4);
   assert.equal(state.home[week], null);
   assert.equal(state.shopping, null);
+  const calls = fetchMock.mock.callCount();
   await generateWeeklyDraft(env, scheduledTime);
-  assert.equal(openai.mock.callCount(), 1);
+  assert.equal(fetchMock.mock.callCount(), calls);
 });
 
-test('a missing recipe or an upstream failure uses complete saved recipes without another request', async t => {
+test('invalid model selections use the catalog and a Krónan outage uses complete saved recipes', async t => {
   const options = { OPENAI_API_KEY:'test-key', OPENAI_MENU_MODEL:'test-model', WEEKLY_MENU_AUTOMATION_ENABLED:'true' };
   const week = '2026-12-07';
-  const dates = Array.from({ length:7 }, (_, i) => `2026-12-${String(7 + i).padStart(2, '0')}`);
-  const incomplete = { week, meals:dates.map(date => ({ date, name:'Súpa', minutes:20,
-    ingredients:['500 g gulrætur'], recipe:null })) };
-  const replies = [Response.json({ status:'completed', output:[{ content:[{ type:'output_text', text:JSON.stringify(incomplete) }] }] }),
-    new Response(null, { status:429 })];
-  const openai = t.mock.method(globalThis, 'fetch', async () => replies.shift());
-  for (const callCount of [1, 2]) {
-    const env = { ...options, DB:testD1(t) };
-    const scheduledTime = Date.parse('2026-12-06T17:00:00Z');
-    await generateWeeklyDraft(env, scheduledTime);
-    const request = new Request('https://example.com/api/household/menu?week=' + week);
-    const { meals, status, activeMeals } = await (await household(request, env)).json();
-    assert.equal(status, 'draft');
-    assert.equal(activeMeals, null);
-    assert.equal(meals.length, 7);
-    for (const meal of meals.slice(0, 5)) {
-      assert.ok(meal.ingredients.length);
-      assert.equal(meal.recipe.servings, 4);
-      assert.match(meal.recipe.instructions, /1\. .+\n\n2\. /);
-      assert.match(meal.url, /^https:\/\/kronan\.is\/uppskriftir\//);
-      assert.equal(meal.source, 'Aðlöguð uppskrift frá Krónunni');
+  const scheduledTime = Date.parse('2026-12-06T17:00:00Z');
+  const request = new Request('https://example.com/api/household/menu?week=' + week);
+  let kronanAvailable = true;
+  let openaiCalls = 0;
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url === 'https://api.openai.com/v1/responses') {
+      openaiCalls++;
+      return selectionResponse(['plokkfiskur', 'pinsa', 'graenmetissupa', 'carbonara', 'lax_saetkartoflu', 'hakk_spaghetti', 'unlisted']);
     }
-    assert.deepEqual(meals.slice(5).map(meal => meal.name), ['Afgangadagur', 'Frjáls dagur']);
-    await generateWeeklyDraft(env, scheduledTime);
-    assert.equal(openai.mock.callCount(), callCount);
+    const { slug } = JSON.parse(options.body).params.arguments;
+    assert.notEqual(slug, 'unlisted');
+    return kronanAvailable ? kronanDinnerResponse(slug) : new Response(null, { status:503 });
+  });
+  const env = { ...options, DB:testD1(t) };
+  await generateWeeklyDraft(env, scheduledTime);
+  const live = await (await household(request, env)).json();
+  assert.equal(live.status, 'draft');
+  assert.equal(new Set(live.meals.map(meal => meal.url)).size, 7);
+  assert.ok(live.meals.every(meal => meal.source === 'Krónan' && meal.recipe.instructions));
+  assert.equal(openaiCalls, 1);
+
+  kronanAvailable = false;
+  const noKey = { WEEKLY_MENU_AUTOMATION_ENABLED:'true', DB:testD1(t) };
+  await generateWeeklyDraft(noKey, scheduledTime);
+  const saved = await (await household(request, noKey)).json();
+  assert.equal(saved.status, 'draft');
+  assert.equal(saved.activeMeals, null);
+  assert.equal(saved.meals.length, 7);
+  for (const meal of saved.meals.slice(0, 5)) {
+    assert.ok(meal.ingredients.length);
+    assert.equal(meal.recipe.servings, 4);
+    assert.match(meal.recipe.instructions, /1\. .+\n\n2\. /);
+    assert.match(meal.url, /^https:\/\/kronan\.is\/uppskriftir\//);
+    assert.equal(meal.source, 'Aðlöguð uppskrift frá Krónunni');
   }
+  assert.deepEqual(saved.meals.slice(5).map(meal => meal.name), ['Afgangadagur', 'Frjáls dagur']);
+  assert.equal(openaiCalls, 1);
+  const calls = fetchMock.mock.callCount();
+  await generateWeeklyDraft(noKey, scheduledTime);
+  assert.equal(fetchMock.mock.callCount(), calls);
 });
 
 test('the current week response shows upcoming drafts to authenticated household members', async t => {

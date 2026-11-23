@@ -90,13 +90,13 @@ Veljið rétta viku undir **Matseðill → Flytja inn JSON**, límið gögnin in
 }
 ```
 
-### Vikuleg drög með OpenAI og Cron
+### Vikuleg drög úr Krónuuppskriftum
 
-Workerinn er með `scheduled`-meðhöndlun. Hún notar Responses API og biður um matseðil fyrir fjóra sem byrjar á mánudegi næstu viku. Áður en drög eru vistuð þarf hver eldaður réttur að hafa hráefni, fjóra skammta og tvö til þrjú eldunarskref. Afgangadagur og frjáls dagur eru valfrjálsir. D1 leyfir að hámarki eina sjálfvirka API-beiðni fyrir hverja viku og beiðnin takmarkast við 3.500 úttakstóka. Keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu.
+Cron-keyrslan fyllir tóma viku með drögum sem þarf að samþykkja í viðmótinu. Workerinn notar staðfest safn af Krónuuppskriftum fyrir fjóra og sækir heiti, hráefni, eldunarskref og slóð á hverja frumuppskrift frá Krónunni. Röð uppskrifta í valinu færist til milli vikna.
 
-Keyrslan á aðalútgáfunni er stillt á sunnudaga kl. 17:00 að íslenskum tíma og notar `gpt-5.4-mini`. `wrangler.toml` geymir tímasetninguna, `OPENAI_MENU_MODEL` og `WEEKLY_MENU_AUTOMATION_ENABLED`. `OPENAI_API_KEY` er Cloudflare Secret í **Runtime variables and secrets → Production**. Yfirfarið API-verð og prófið JSON-úttak þegar skipt er um líkan eða lykil.
+Keyrslan á aðalútgáfunni er stillt á sunnudaga kl. 17:00 að íslenskum tíma. Með `OPENAI_MENU_MODEL` og `OPENAI_API_KEY` velur Responses API sjö auðkenni úr safninu og raðar þeim á daga. Það er að hámarki ein OpenAI-beiðni á viku með 500 úttakstóka hámarki. `OPENAI_API_KEY` er Cloudflare Secret í **Runtime variables and secrets → Production** og líkanið er stillt í `wrangler.toml`.
 
-OpenAI semur uppskriftirnar í venjulegri keyrslu. Ef beiðnin mistekst eða leiðbeiningar vantar setur Workerinn saman varamatseðil með vistuðum hráefnalistum, eldunarskrefum og tenglum á Krónuuppskriftir. Sjálfvirka tilraunin er bókuð fyrir vikuna til að forðast endurteknar gjaldfærslur. Til að gera keyrsluna óvirka skal stilla `WEEKLY_MENU_AUTOMATION_ENABLED` á `false`, setja `crons = []` undir `[triggers]` og gefa Workerinn aftur út.
+Ef OpenAI-lykill vantar eða valið mistekst notar Workerinn röð safnsins. Ef færri en sjö fullar uppskriftir skila sér frá Krónunni notar keyrslan staðbundinn varamatseðil með fimm merktum, aðlöguðum Krónuuppskriftum, afgangadegi og frjálsum degi. Til að gera keyrsluna óvirka skal stilla `WEEKLY_MENU_AUTOMATION_ENABLED` á `false`, setja `crons = []` undir `[triggers]` og gefa Workerinn aftur út.
 
 ### Microsoft To Do
 
