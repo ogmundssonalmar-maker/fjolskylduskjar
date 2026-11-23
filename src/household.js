@@ -1,5 +1,5 @@
 import { CalendarError, addCalendarEvent, readCalendar } from './calendar.js';
-import { fillKronanIngredients } from './kronan.js';
+import { fillKronanIngredients, readKronanLibrary, readKronanRecipeLink } from './kronan.js';
 import { buildShopping, manualShoppingItem, menuSignature, validPrice, validWeek, weekStart } from './shopping.js';
 import { emptyMealName, emptyMenu, importMeals, normalizeRecipe, validIngredientLines, validMinutes, validRecipe, validRecipeSource, validRecipeUrl } from './menu-import.js';
 
@@ -231,6 +231,26 @@ async function weeklyMenu(request, db, week) {
   return meta.changes ? response({ week, version:state.version + 1, ...update, status:menuState(update) }) : conflict();
 }
 
+async function mealRecipes(request, db) {
+  if (!db) return response({ error:'Gagnagrunnur hefur ekki verið tengdur.' }, 503);
+  if (request.method === 'GET') {
+    const library = await readKronanLibrary(db);
+    return response({ recipes:[...library.values()] });
+  }
+  if (request.method !== 'POST') return response({ error:'Aðferð óheimil.' }, 405);
+  if (request.headers.get('Origin') !== new URL(request.url).origin ||
+      request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') {
+    return response({ error:'Beiðni óheimil.' }, 403);
+  }
+  const body = await request.text();
+  if (body.length > 4096) return response({ error:'Beiðni er of stór.' }, 413);
+  let input;
+  try { input = JSON.parse(body); }
+  catch { return response({ error:'Ógild beiðni.' }, 400); }
+  if (!input?.url || !validRecipeUrl(input.url)) return response({ error:'Settu inn gilda uppskriftaslóð.' }, 400);
+  return response({ recipe:await readKronanRecipeLink(db, input.url) });
+}
+
 export async function household(request, env) {
   const { pathname, searchParams } = new URL(request.url);
   if (pathname === '/api/calendar' && request.method === 'GET') {
@@ -270,6 +290,7 @@ export async function household(request, env) {
     }
   }
   if (pathname === '/api/household/menu') return weeklyMenu(request, env.DB, searchParams.get('week'));
+  if (pathname === '/api/household/recipes') return mealRecipes(request, env.DB);
   if (pathname !== '/api/household') return response({ error: 'Slóð fannst ekki.' }, 404);
   if (!env.DB) return response({ error: 'Gagnagrunnur hefur ekki verið tengdur.' }, 503);
 

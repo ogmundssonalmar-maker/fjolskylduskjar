@@ -31,24 +31,30 @@ async function readRecipe(slug) {
   return null;
 }
 
-export async function fetchKronanDinner(slug) {
+async function fetchKronanRecipe(slug) {
   const recipe = await readRecipe(slug);
-  if (!recipe || recipe.servings !== 4 || recipeSlug(recipe.recipeButton?.url) !== slug) return null;
+  if (!recipe || recipeSlug(recipe.recipeButton?.url).toLowerCase() !== slug.toLowerCase()) return null;
 
   const sourceLines = recipe.ingredientGroups?.flatMap(group => group.ingredients || []);
   if (!sourceLines?.length || !validIngredientLines(sourceLines)) return null;
   const groups = recipe.stepGroups || [];
   const steps = groups.flatMap(group => group.steps || []);
-  if (steps.length < 2 || steps.some(step => typeof step?.text !== 'string' || !step.text.trim())) return null;
+  if (!steps.length || steps.some(step => typeof step?.text !== 'string' || !step.text.trim())) return null;
 
   const instructions = groups.map(group => {
     const lines = (group.steps || []).map(({ text }, index) => `${index + 1}. ${text.trim()}`);
     return [group.name, ...lines].filter(Boolean).join('\n');
   }).filter(Boolean).join('\n\n');
-  const details = { title:recipe.name, servings:recipe.servings, instructions };
+  const details = { title:recipe.name, instructions,
+    ...(Number.isInteger(recipe.servings) && recipe.servings > 0 ? { servings:recipe.servings } : {}) };
   if (!validRecipe(details)) return null;
   return { name:recipe.name, minutes:validMinutes(recipe.totalMinutes) ? recipe.totalMinutes : null,
     url:recipe.recipeButton.url, ingredients:sourceLines, recipe:details, source:'Krónan' };
+}
+
+export async function fetchKronanDinner(slug) {
+  const meal = await fetchKronanRecipe(slug);
+  return meal?.recipe.servings === 4 ? meal : null;
 }
 
 export async function readKronanLibrary(db) {
@@ -59,6 +65,13 @@ export async function readKronanLibrary(db) {
     if (!/no such table: kronan_recipe_library\b/i.test(error?.message ?? '')) throw error;
     return new Map();
   }
+}
+
+export async function readKronanRecipeLink(db, link) {
+  const slug = recipeSlug(link);
+  if (!slug) return null;
+  const library = await readKronanLibrary(db);
+  return library.get(slug.toLowerCase()) || fetchKronanRecipe(slug).catch(() => null);
 }
 
 export async function fillKronanIngredients(meals) {

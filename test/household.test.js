@@ -609,6 +609,46 @@ test('weekly drafts can use the verified Krónan library without an upstream con
   assert.ok(draft.meals.every(meal => meal.source === 'Krónan' && meal.recipe.instructions));
 });
 
+test('household recipe ideas and link imports use the saved library and the official Krónan endpoint', async t => {
+  const DB = testD1(t);
+  const env = { DB, HOUSEHOLD_EDIT_CODE:'recipe-tests-only' };
+  const origin = 'https://example.com';
+  const endpoint = origin + '/api/household/recipes';
+  const stored = { name:'Plokkfiskur', minutes:50, url:'https://kronan.is/uppskriftir/plokkfiskur', source:'Krónan',
+    ingredients:['400 g ýsa'], recipe:{ title:'Plokkfiskur', servings:4, instructions:'Blandið fiskinum saman við sósuna.' } };
+  DB.prepare('CREATE TABLE kronan_recipe_library (id INTEGER PRIMARY KEY, recipes TEXT NOT NULL)').run();
+  DB.prepare('INSERT INTO kronan_recipe_library VALUES (1, ?)').bind(JSON.stringify({ plokkfiskur:stored })).run();
+  const session = await worker.fetch(new Request(origin + '/api/household/session', { method:'POST',
+    headers:{ Origin:origin, 'Content-Type':'application/json' }, body:JSON.stringify({ code:env.HOUSEHOLD_EDIT_CODE }) }), env);
+  assert.equal(session.status, 200);
+  const cookie = session.headers.get('Set-Cookie').split(';')[0];
+  const send = (url, from = origin) => worker.fetch(new Request(endpoint, { method:'POST',
+    headers:{ Origin:from, 'Content-Type':'application/json', Cookie:cookie }, body:JSON.stringify({ url }) }), env);
+  assert.equal((await worker.fetch(new Request(endpoint), env)).status, 403);
+  const list = await worker.fetch(new Request(endpoint, { headers:{ Cookie:cookie } }), env);
+  assert.equal(list.status, 200);
+  assert.deepEqual(await list.json(), { recipes:[stored] });
+
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://kronan.is/api/v3/mcp');
+    const { name, arguments:{ slug } } = JSON.parse(options.body).params;
+    assert.equal(name, 'fetch_recipe');
+    assert.equal(slug, 'ny-uppskrift');
+    const body = await kronanDinnerResponse(slug).json();
+    body.result.structuredContent.recipe.servings = 2;
+    return Response.json(body);
+  });
+  assert.equal((await send(stored.url, 'https://other.example')).status, 403);
+  assert.equal((await send('javascript:alert(1)')).status, 400);
+  assert.deepEqual(await (await send('https://www.kronan.is/snjallverslun/uppskriftir/plokkfiskur/?ref=recipe-list')).json(), { recipe:stored });
+  assert.deepEqual(await (await send('https://kronan.is.example.org/uppskriftir/plokkfiskur')).json(), { recipe:null });
+  assert.equal(fetchMock.mock.callCount(), 0);
+  const live = await (await send('https://kronan.is/uppskriftir/ny-uppskrift')).json();
+  assert.equal(live.recipe.recipe.servings, 2);
+  assert.equal(live.recipe.source, 'Krónan');
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
+
 test('the current week response shows upcoming drafts to authenticated household members', async t => {
   const DB = testD1(t);
   const current = weekStart();

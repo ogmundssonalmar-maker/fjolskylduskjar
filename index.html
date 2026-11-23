@@ -77,6 +77,10 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .menu-dialog input,.menu-dialog textarea,.menu-dialog select{font:inherit;display:block;width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;margin-top:4px;color:var(--ink);background:white}
 .menu-dialog textarea{resize:vertical}
 .menu-card-actions,.shopping-item-actions{display:flex;flex-wrap:wrap;gap:5px}
+.meal-tools button[aria-expanded="true"]{background:var(--mint);border-color:#9db4a5}
+.meal-tool{margin-top:8px;padding:2px 12px 10px;background:var(--mint);border-radius:9px}
+.meal-tool .help,#mealDialogStatus,.meal-dialog-day{margin:6px 0}
+#mealDialogStatus:empty{display:none}
 .shopping-item-actions .outline{padding:7px 8px}
 .menu-row .meal-open{grid-column:1/3;display:grid;grid-template-columns:58px minmax(0,1fr);align-items:center;gap:14px;padding:7px 0;border-radius:7px;color:var(--forest);overflow-wrap:anywhere}
 .menu-row a.meal-open:hover{background:var(--mint);text-decoration:none}
@@ -305,7 +309,26 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 </dialog>
 <dialog class="menu-dialog" id="mealDialog" aria-labelledby="mealDialogHeading">
   <form id="mealForm">
+    <p class="help meal-dialog-day" id="mealDialogDay"></p>
     <h2 id="mealDialogHeading">Breyta máltíð</h2>
+    <div class="menu-card-actions meal-tools" role="group" aria-label="Valkostir fyrir máltíð">
+      <button class="outline" type="button" data-meal-tool="swap" aria-controls="mealSwapPanel" aria-expanded="false">Víxla dögum</button>
+      <button class="outline" type="button" data-meal-tool="ideas" aria-controls="mealIdeasPanel" aria-expanded="false">Fleiri hugmyndir</button>
+      <button class="outline" type="button" data-meal-tool="link" aria-controls="mealLinkPanel" aria-expanded="false">Flytja inn hlekk</button>
+    </div>
+    <div class="meal-tool" id="mealSwapPanel" hidden>
+      <label>Víxla við dag <select id="mealSwapDay"></select></label>
+      <button class="outline" type="button" id="saveMealSwap">Víxla og vista drög</button>
+    </div>
+    <div class="meal-tool" id="mealIdeasPanel" hidden>
+      <label>Uppskriftir frá Krónunni <select id="mealIdeasList"></select></label>
+      <button class="outline" type="button" id="chooseMealIdea" disabled>Nota uppskrift</button>
+    </div>
+    <div class="meal-tool" id="mealLinkPanel" hidden>
+      <label>Hlekkur á uppskrift <input id="mealLinkInput" maxlength="1024" placeholder="https://…" inputmode="url"></label>
+      <button class="outline" type="button" id="loadMealLink">Sækja uppskrift</button>
+    </div>
+    <p class="help" id="mealDialogStatus" role="status"></p>
     <label>Heiti <input name="mealName" required maxlength="180"></label>
     <label>Uppskriftaslóð <input name="url" type="url" maxlength="1024"></label>
     <label>Uppruni uppskriftar <input name="recipeOrigin" maxlength="140" placeholder="T.d. Krónan eða heiti matreiðslubókar"></label>
@@ -319,7 +342,6 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       <label>Fjöldi skammta <input name="servings" type="number" min="1" max="100"></label>
       <label>Leiðbeiningar <textarea name="instructions" rows="3" maxlength="2000"></textarea></label>
     </details>
-    <p class="help" id="mealDialogStatus" role="status"></p>
     <div class="month-controls">
       <button class="outline" type="button" id="closeMealDialog">Hætta við</button>
       <button class="solid" type="submit" id="mealSubmit">Vista máltíð</button>
@@ -933,9 +955,20 @@ const recipeDialog = document.getElementById('recipeDialog');
 const mealForm = document.getElementById('mealForm');
 const mealDialogStatus = document.getElementById('mealDialogStatus');
 const mealSubmit = document.getElementById('mealSubmit');
+const mealTools = [...mealForm.querySelectorAll('[data-meal-tool]')];
+const mealSwapDay = document.getElementById('mealSwapDay');
+const saveMealSwap = document.getElementById('saveMealSwap');
+const mealIdeasList = document.getElementById('mealIdeasList');
+const chooseMealIdea = document.getElementById('chooseMealIdea');
+const mealLinkInput = document.getElementById('mealLinkInput');
+const loadMealLink = document.getElementById('loadMealLink');
 const menuImportDialog = document.getElementById('menuImportDialog');
 const shoppingPriceDialog = document.getElementById('shoppingPriceDialog');
 let mealIndex;
+let mealEditVersion;
+let activeMealTool;
+let mealToolRequest;
+let mealIdeas = [];
 let openRecipeIndex = null;
 
 function menuDialogIsOpen() {
@@ -946,10 +979,7 @@ function menuEditDialogIsOpen() {
   return mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
 }
 
-function editMeal(index) {
-  if (menuSaving || (version !== null && menuVersion === null)) return;
-  mealIndex = index;
-  const meal = meals[index];
+function fillMealForm(meal, openRecipeFields = false) {
   const fields = mealForm.elements;
   fields.mealName.value = meal.name === emptyMealName ? '' : meal.name;
   fields.url.value = meal.url;
@@ -959,13 +989,184 @@ function editMeal(index) {
   fields.recipeTitle.value = meal.recipe?.title || '';
   fields.servings.value = meal.recipe?.servings ?? '';
   fields.instructions.value = meal.recipe?.instructions || '';
-  document.getElementById('recipeFields').open = Boolean(meal.recipe);
+  document.getElementById('recipeFields').open = openRecipeFields && Boolean(meal.recipe);
+}
+
+function selectMealTool(tool) {
+  mealToolRequest?.abort();
+  mealToolRequest = null;
+  activeMealTool = tool;
+  for (const button of mealTools) {
+    const open = button.dataset.mealTool === tool;
+    button.setAttribute('aria-expanded', open);
+    document.getElementById(button.getAttribute('aria-controls')).hidden = !open;
+  }
   mealDialogStatus.textContent = '';
+  loadMealLink.disabled = false;
+}
+
+function editMeal(index) {
+  if (menuSaving || (version !== null && menuVersion === null)) return;
+  mealIndex = index;
+  mealEditVersion = menuVersion;
+  const meal = meals[index];
+  fillMealForm(meal, true);
+  document.getElementById('mealDialogDay').textContent = menuMealDate(index);
+  mealTools.find(button => button.dataset.mealTool === 'swap').hidden = meal.name === emptyMealName;
+  mealTools.find(button => button.dataset.mealTool === 'ideas').hidden = version === null;
+  mealSwapDay.replaceChildren(new Option('Veldu dag', ''), ...meals.flatMap(({ name }, i) => i === index ? [] :
+    [new Option(`${menuMealDate(i)} · ${name}`, i)]));
+  saveMealSwap.disabled = true;
+  mealLinkInput.value = '';
+  selectMealTool(null);
   mealDialog.showModal();
 }
-document.getElementById('closeMealDialog').addEventListener('click', () => mealDialog.close());
+
+function menuMealDate(index) {
+  const [, month, day] = offsetDay(menuWeek, index).split('-').map(Number);
+  return `${shortDays[index]} ${day}.${month}.`;
+}
+
+function canSaveMealEdit() {
+  if (menuSaving) return false;
+  if (menuVersion === mealEditVersion) return true;
+  mealDialogStatus.textContent = 'Drögin hafa breyst. Opnaðu máltíðina aftur til að fá nýjustu útgáfu.';
+  return false;
+}
+
+document.getElementById('closeMealDialog').addEventListener('click', () => {
+  if (!menuSaving) mealDialog.close();
+});
+mealDialog.addEventListener('cancel', event => {
+  if (menuSaving) event.preventDefault();
+});
+mealDialog.addEventListener('close', () => {
+  selectMealTool(null);
+  if (document.activeElement === document.body) document.querySelector(`[data-edit-meal="${mealIndex}"]`)?.focus();
+});
+
+for (const button of mealTools) button.addEventListener('click', () => {
+  if (menuSaving) return;
+  const tool = activeMealTool === button.dataset.mealTool ? null : button.dataset.mealTool;
+  selectMealTool(tool);
+  if (tool === 'ideas') loadMealIdeas();
+  if (tool === 'link') mealLinkInput.focus();
+});
+
+mealSwapDay.addEventListener('change', () => { saveMealSwap.disabled = mealSwapDay.value === ''; });
+saveMealSwap.addEventListener('click', async () => {
+  if (!canSaveMealEdit() || !mealSwapDay.value) return;
+  const index = mealIndex;
+  const target = Number(mealSwapDay.value);
+  saveMealSwap.disabled = true;
+  const saved = await saveMenuChange(draft => {
+    const first = draft.meals[index];
+    const second = draft.meals[target];
+    draft.meals[index] = { ...second, day:shortDays[index], ingredients:second.ingredients ?? [], source:second.source ?? null };
+    draft.meals[target] = { ...first, day:shortDays[target], ingredients:first.ingredients ?? [], source:first.source ?? null };
+  }, { reportError:message => { mealDialogStatus.textContent = message; } });
+  saveMealSwap.disabled = false;
+  if (saved) {
+    mealIndex = target;
+    mealDialog.close();
+  }
+});
+
+async function requestMealRecipes(options = {}) {
+  mealToolRequest?.abort();
+  const controller = new AbortController();
+  mealToolRequest = controller;
+  try {
+    const response = await fetch('/api/household/recipes', { cache:'no-store', ...options, signal:controller.signal });
+    if (!response.ok) throw new Error('Recipe request failed.');
+    const result = await response.json();
+    return controller.signal.aborted ? null : result;
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
+    return null;
+  } finally {
+    if (mealToolRequest === controller) mealToolRequest = null;
+  }
+}
+
+async function loadMealIdeas() {
+  mealIdeasList.replaceChildren(new Option('Sæki uppskriftir …', ''));
+  chooseMealIdea.disabled = true;
+  try {
+    const result = await requestMealRecipes();
+    if (!result) return;
+    const usedLinks = new Set(meals.map(meal => recipeKey(meal.url)));
+    mealIdeas = result.recipes.filter(recipe => !usedLinks.has(recipeKey(recipe.url)))
+      .sort((a,b) => a.name.localeCompare(b.name, 'is'));
+    mealIdeasList.replaceChildren(new Option(mealIdeas.length ? 'Veldu uppskrift' : 'Engar fleiri uppskriftir í safninu', ''),
+      ...mealIdeas.map(({ name, minutes }, i) => new Option(minutes ? `${name} · ${minutes} mín.` : name, i)));
+  } catch {
+    mealIdeasList.replaceChildren(new Option('Uppskriftir óaðgengilegar', ''));
+    mealDialogStatus.textContent = 'Ekki tókst að sækja uppskriftir. Prófaðu aftur.';
+  }
+}
+
+function recipeKey(link) {
+  const address = recipeUrl(link);
+  if (!address) return '';
+  const url = new URL(address);
+  return url.hostname.replace(/^www\./, '') + url.pathname.replace(/^\/snjallverslun(?=\/uppskriftir\/)/, '').replace(/\/$/, '');
+}
+
+function useMealRecipe(recipe) {
+  const activator = mealTools.find(button => button.dataset.mealTool === activeMealTool);
+  fillMealForm(recipe);
+  selectMealTool(null);
+  mealDialogStatus.textContent = recipe.name
+    ? 'Uppskriftin er tilbúin. Yfirfarðu hana og vistaðu máltíðina.'
+    : 'Hlekkurinn er kominn inn. Skráðu heiti réttarins og vistaðu máltíðina.';
+  if (recipe.name) activator?.focus();
+  else mealForm.elements.mealName.focus();
+}
+
+function useMealLink(url, recipe) {
+  if (recipe) useMealRecipe(recipe);
+  else if (url === recipeUrl(mealForm.elements.url.value)) {
+    selectMealTool(null);
+    mealDialogStatus.textContent = 'Slóðin er þegar skráð fyrir máltíðina.';
+  } else useMealRecipe({ name:'', url });
+}
+
+mealIdeasList.addEventListener('change', () => { chooseMealIdea.disabled = mealIdeasList.value === ''; });
+chooseMealIdea.addEventListener('click', () => {
+  if (!menuSaving && mealIdeasList.value !== '') useMealRecipe(mealIdeas[Number(mealIdeasList.value)]);
+});
+mealLinkInput.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    loadMealLink.click();
+  }
+});
+loadMealLink.addEventListener('click', async () => {
+  if (menuSaving) return;
+  const url = recipeUrl(mealLinkInput.value.trim());
+  if (!url || url.length > 1024) {
+    mealDialogStatus.textContent = 'Settu inn gilda uppskriftaslóð.';
+    return;
+  }
+  if (version === null) {
+    useMealLink(url);
+    return;
+  }
+  loadMealLink.disabled = true;
+  mealDialogStatus.textContent = 'Sæki uppskrift …';
+  try {
+    const result = await requestMealRecipes({ method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ url }) });
+    if (result) useMealLink(url, result.recipe);
+  } catch {
+    useMealLink(url);
+  }
+});
+
 mealForm.addEventListener('submit', async event => {
   event.preventDefault();
+  if (!canSaveMealEdit()) return;
   const { mealName, url, recipeOrigin, ingredients, minutes, recipeTitle, servings, instructions } = Object.fromEntries(new FormData(mealForm));
   const lines = ingredients.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const link = recipeUrl(url.trim());
@@ -974,6 +1175,7 @@ mealForm.addEventListener('submit', async event => {
     return;
   }
   mealSubmit.disabled = true;
+  mealDialogStatus.textContent = '';
   try {
     const saved = await saveMenuChange(draft => {
       const previous = draft.meals[mealIndex];
@@ -985,9 +1187,9 @@ mealForm.addEventListener('submit', async event => {
       } : undefined;
       draft.meals[mealIndex] = { day:previous.day, name, url:link, ingredients:lines,
         minutes:minutes === '' ? null : Number(minutes), ...(recipe ? { recipe } : {}), source:source || null };
-    });
+    }, { reportError:message => { mealDialogStatus.textContent = message; } });
     if (saved) mealDialog.close();
-    else mealDialogStatus.textContent = 'Breytingin vistaðist ekki. Reyndu aftur.';
+    else if (!mealDialogStatus.textContent) mealDialogStatus.textContent = 'Breytingin vistaðist ekki. Reyndu aftur.';
   } finally {
     mealSubmit.disabled = false;
   }
@@ -1173,7 +1375,7 @@ function renderMeals() {
     return `<div class="menu-row">
       ${registered ? `<a class="meal-open" href="${xss(recipePath(dayKey))}" aria-haspopup="dialog" data-recipe-index="${index}">${mealSummary}</a>`
         : `<div class="meal-open">${mealSummary}</div>`}
-      <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${registered ? 'Breyta' : 'Skrá'}</button>
+      <button type="button" onclick="editMeal(${index})" data-edit-meal="${index}" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${registered ? 'Breyta' : 'Skrá'}</button>
       ${registered && link ? `<a class="meal-source" href="${xss(link)}" target="_blank" rel="noopener noreferrer">${xss(sourceAction)}</a>` : ''}
       <div class="menu-events" data-menu-day="${dayKey}"></div></div>`;
   }).join('');

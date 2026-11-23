@@ -16,7 +16,7 @@ export async function serveWorker(request, env, assets = env.ASSETS) {
   if (pathname === '/api/todo/callback') return todoCallback(request, env);
   const todoPath = pathname === '/api/todo' || pathname.startsWith('/api/todo/');
   const route = todoPath ? todo : pathname === '/api/trips' ? trips : household;
-  if ((todoPath || ['/api/household', '/api/household/menu', '/api/calendar/events', '/api/trips'].includes(pathname)) &&
+  if ((todoPath || ['/api/household', '/api/household/menu', '/api/household/recipes', '/api/calendar/events', '/api/trips'].includes(pathname)) &&
       await hasHouseholdSession(request, env.HOUSEHOLD_EDIT_CODE)) {
     return route(request, env);
   }
