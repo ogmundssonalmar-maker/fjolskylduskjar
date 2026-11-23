@@ -83,6 +83,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .meal-open small{display:block}
 .meal-open .meal-day{font-size:12px;font-weight:800;color:var(--muted)}
 .meal-open .meal-day small{display:inline}
+.meal-open .meal-origin{color:var(--ink);font-weight:650}
 .meal-open .meal-action{margin-top:3px;color:var(--forest);text-decoration:underline}
 .meal-source{grid-column:2/-1;font-size:12px;overflow-wrap:anywhere}
 .menu-row .meal-source{text-decoration:underline}
@@ -97,9 +98,11 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 #recipeDialog h3{font-size:15px;margin:14px 0 5px}
 #recipeDialog ul{margin:0;padding-left:20px;overflow-wrap:anywhere}
 #recipeInstructions{white-space:pre-line;overflow-wrap:anywhere;margin:0}
-.recipe-attribution{margin:10px 0 0}
-.recipe-attribution .help{margin:0;overflow-wrap:anywhere}
-#recipeSource{display:inline-block;margin-top:4px;overflow-wrap:anywhere}
+.recipe-attribution{background:var(--mint);border:1px solid var(--border);border-radius:9px;margin:12px 0;padding:10px 12px;overflow-wrap:anywhere}
+.recipe-attribution p{margin:0}
+#recipeOrigin{font-weight:650}
+.recipe-link-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:6px}
+#copyRecipeMessage{color:var(--forest)}
 #menuStage{margin:5px 0 9px}
 .menu-draft-link{display:inline-block;margin:4px 0 12px;color:var(--forest);font-weight:650;text-decoration:none}
 .menu-draft-link:hover{text-decoration:underline}
@@ -283,11 +286,17 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     <button class="outline" type="button" id="closeRecipeDialog" autofocus>Loka</button>
   </header>
   <div class="recipe-body" id="recipeBody" tabindex="0" role="region" aria-label="Uppskrift">
-    <p class="help" id="recipeDetails" hidden></p>
     <div class="recipe-attribution" id="recipeAttribution" hidden>
-      <p class="help" id="recipeOrigin"></p>
-      <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden></a>
+      <p id="recipeOrigin"></p>
+      <p class="help" id="recipeNoSourceUrl" hidden>Engin slóð á ytri uppskrift er skráð.</p>
+      <div class="recipe-link-actions">
+        <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden></a>
+        <button class="outline" type="button" id="copyRecipeLink" hidden>Afrita hlekk á uppskrift</button>
+      </div>
+      <input id="recipeLinkAddress" type="url" aria-label="Hlekkur á uppskrift á fjölskylduskjánum" readonly hidden>
+      <p class="help" id="copyRecipeMessage" role="status"></p>
     </div>
+    <p class="help" id="recipeDetails" hidden></p>
     <section id="recipeIngredientsSection" hidden>
       <h3>Hráefni</h3>
       <ul id="recipeIngredients"></ul>
@@ -1035,12 +1044,20 @@ const menuSyncUnlock = document.getElementById('menuSyncUnlock');
 const homeDraftLink = document.getElementById('homeDraftLink');
 const menuDraftLink = document.getElementById('menuDraftLink');
 const menuMeals = document.getElementById('menuAll');
+const recipeLinkAddress = document.getElementById('recipeLinkAddress');
+const copyRecipeLink = document.getElementById('copyRecipeLink');
+const copyRecipeMessage = document.getElementById('copyRecipeMessage');
 menuSyncUnlock.addEventListener('click', () => syncUnlock.click());
+
+function recipePath(day) {
+  return `?vika=${menuWeek}&rettur=${day}`;
+}
 
 function renderMealRecipe(index) {
   const meal = meals[index];
   if (!meal || meal.name === emptyMealName) return false;
-  const [, month, day] = offsetDay(menuWeek, index).split('-').map(Number);
+  const recipeDay = offsetDay(menuWeek, index);
+  const [, month, day] = recipeDay.split('-').map(Number);
   document.getElementById('recipeDate').textContent = `${meal.day} ${day}. ${monthNames[month - 1]}`;
   document.getElementById('recipeHeading').textContent = meal.name;
   const details = [meal.recipe?.title === meal.name ? '' : meal.recipe?.title,
@@ -1062,8 +1079,16 @@ function renderMealRecipe(index) {
   document.getElementById('recipeInstructionsSection').hidden = !instructions;
   document.getElementById('recipeInstructions').textContent = instructions || '';
   const { link, origin, sourceAction } = recipeAttribution(meal);
+  const canCopy = menuVersion > 0 && Boolean(ingredients.length || instructions || link);
+  copyRecipeLink.hidden = !canCopy;
+  recipeLinkAddress.value = canCopy ? new URL(recipePath(recipeDay), location.href).href : '';
+  if (!canCopy) {
+    recipeLinkAddress.hidden = true;
+    copyRecipeMessage.textContent = '';
+  }
   document.getElementById('recipeAttribution').hidden = !origin;
   document.getElementById('recipeOrigin').textContent = origin;
+  document.getElementById('recipeNoSourceUrl').hidden = Boolean(link);
   const source = document.getElementById('recipeSource');
   source.hidden = !link;
   if (link) {
@@ -1079,6 +1104,8 @@ function renderMealRecipe(index) {
 
 function openMealRecipe(index) {
   if (recipeDialog.open || !renderMealRecipe(index)) return;
+  recipeLinkAddress.hidden = true;
+  copyRecipeMessage.textContent = '';
   openRecipeIndex = index;
   recipeDialog.showModal();
   document.getElementById('recipeBody').scrollTop = 0;
@@ -1094,6 +1121,21 @@ function recipeAttribution(meal) {
     : meal.ingredients?.length || meal.recipe?.instructions ? 'Uppruni óskráður' : '',
     sourceAction:site === 'Krónan' ? 'Opna uppskrift hjá Krónunni ↗' : `Opna uppskrift á ${site} ↗` };
 }
+
+copyRecipeLink.addEventListener('click', async () => {
+  const address = recipeLinkAddress.value;
+  const index = openRecipeIndex;
+  try {
+    await navigator.clipboard.writeText(address);
+    if (recipeDialog.open && openRecipeIndex === index) copyRecipeMessage.textContent = 'Hlekkur afritaður.';
+  } catch {
+    if (!recipeDialog.open || openRecipeIndex !== index) return;
+    recipeLinkAddress.hidden = false;
+    recipeLinkAddress.focus();
+    recipeLinkAddress.select();
+    copyRecipeMessage.textContent = 'Afritaðu slóðina úr reitnum.';
+  }
+});
 
 menuMeals.addEventListener('click', event => {
   const link = event.target.closest('a[data-recipe-index]');
@@ -1158,11 +1200,10 @@ function renderMeals() {
     const { link, origin, sourceAction } = recipeAttribution(meal);
     const mealSummary = `<span class="meal-day">${xss(meal.day)} <small>${xss(date)}</small></span>
       <span><strong>${xss(meal.name)}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}
-        ${origin ? `<small>${xss(origin)}</small>` : ''}
+        ${origin ? `<small class="meal-origin">${xss(origin)}</small>` : ''}
         ${registered ? '<small class="meal-action">Skoða uppskrift</small>' : ''}</span>`;
-    const recipePath = `?vika=${menuWeek}&amp;rettur=${dayKey}`;
     return `<div class="menu-row">
-      ${registered ? `<a class="meal-open" href="${recipePath}" aria-haspopup="dialog" data-recipe-index="${index}">${mealSummary}</a>`
+      ${registered ? `<a class="meal-open" href="${xss(recipePath(dayKey))}" aria-haspopup="dialog" data-recipe-index="${index}">${mealSummary}</a>`
         : `<div class="meal-open">${mealSummary}</div>`}
       <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${registered ? 'Breyta' : 'Skrá'}</button>
       ${registered && link ? `<a class="meal-source" href="${xss(link)}" target="_blank" rel="noopener noreferrer">${xss(sourceAction)}</a>` : ''}
