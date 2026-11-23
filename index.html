@@ -78,11 +78,15 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .menu-dialog textarea{resize:vertical}
 .menu-card-actions,.shopping-item-actions{display:flex;flex-wrap:wrap;gap:5px}
 .shopping-item-actions .outline{padding:7px 8px}
-.menu-row .meal-open{grid-column:1/3;display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:14px;text-align:left;padding:7px 0;border:0;background:transparent;color:var(--forest);font:inherit;overflow-wrap:anywhere}
-.menu-row .meal-open:hover:not(:disabled){background:var(--mint)}
-.menu-row .meal-open:disabled{color:var(--muted);cursor:default}
+.menu-row .meal-open{grid-column:1/3;display:grid;grid-template-columns:58px minmax(0,1fr);align-items:center;gap:14px;padding:7px 0;border-radius:7px;color:var(--forest);overflow-wrap:anywhere}
+.menu-row a.meal-open:hover{background:var(--mint);text-decoration:none}
+.meal-open small{display:block}
 .meal-open .meal-day{font-size:12px;font-weight:800;color:var(--muted)}
-@media(max-width:650px){.menu-row .meal-open{grid-template-columns:41px minmax(0,1fr) auto;gap:9px}}
+.meal-open .meal-day small{display:inline}
+.meal-open .meal-action{margin-top:3px;color:var(--forest);text-decoration:underline}
+.meal-source{grid-column:2/-1;font-size:12px;overflow-wrap:anywhere}
+.menu-row .meal-source{text-decoration:underline}
+@media(max-width:650px){.menu-row .meal-open{grid-template-columns:41px minmax(0,1fr);gap:9px}}
 #recipeDialog[open]{display:flex;flex-direction:column;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);padding:0;overflow:hidden}
 .recipe-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex:none;padding:16px 20px;border-bottom:1px solid var(--border)}
 .recipe-header .help{margin:0 0 4px}
@@ -415,6 +419,7 @@ function localWeekMeals(week) {
   return load(menuStorageKey(week), fallback);
 }
 let menuWeek = mondayFor(today);
+let linkedRecipeDay = null;
 let followsCurrentWeek = true;
 let menuVersion = null;
 let menuStage = 'draft';
@@ -632,6 +637,7 @@ async function refreshShared() {
       meals = localWeekMeals(menuWeek);
       shopping = null;
       todoState = null;
+      if (recipeDialog.open) recipeDialog.close();
       renderShared();
       syncUnlock.hidden = false;
       syncStatus.textContent = 'Virkjaðu samstillingu til að deila verkefnum og matseðli.';
@@ -681,6 +687,7 @@ function selectMenuWeek(week) {
   if (week === menuWeek || menuSaving) return;
   menuRequestId++;
   menuWeek = week;
+  linkedRecipeDay = null;
   followsCurrentWeek = week === mondayFor(today);
   menuVersion = null;
   menuStage = 'draft';
@@ -743,13 +750,13 @@ copyMenuWeek.addEventListener('click', async () => {
 });
 
 async function refreshWeekMenu({ whileEditing = false } = {}) {
-  if (version === null || menuSaving || (menuDialogIsOpen() && !whileEditing)) return;
+  if (version === null || menuSaving || (menuEditDialogIsOpen() && !whileEditing)) return;
   const requestId = ++menuRequestId;
   try {
     const response = await fetch(menuUrl(menuWeek), { cache:'no-store' });
     if (!response.ok) throw new Error();
     const state = await response.json();
-    if (requestId !== menuRequestId || menuSaving || version === null || (menuDialogIsOpen() && !whileEditing)) return;
+    if (requestId !== menuRequestId || menuSaving || version === null || (menuEditDialogIsOpen() && !whileEditing)) return;
     homeMenus = state.home;
     draftWeeks = state.draftWeeks || [];
     menuLoadFailed = false;
@@ -761,8 +768,13 @@ async function refreshWeekMenu({ whileEditing = false } = {}) {
       shopping = state.shopping;
       renderMeals();
       renderShopping();
+      if (recipeDialog.open && !renderMealRecipe(openRecipeIndex)) recipeDialog.close();
     }
     renderToday();
+    if (linkedRecipeDay && menuPageIsOpen() && !menuDialogIsOpen()) {
+      openMealRecipe(weekdayIndex(linkedRecipeDay));
+      linkedRecipeDay = null;
+    }
   } catch {
     if (requestId !== menuRequestId || menuVersion !== null) return;
     menuLoadFailed = true;
@@ -921,9 +933,14 @@ const mealSubmit = document.getElementById('mealSubmit');
 const menuImportDialog = document.getElementById('menuImportDialog');
 const shoppingPriceDialog = document.getElementById('shoppingPriceDialog');
 let mealIndex;
+let openRecipeIndex = null;
 
 function menuDialogIsOpen() {
-  return recipeDialog.open || mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
+  return recipeDialog.open || menuEditDialogIsOpen();
+}
+
+function menuEditDialogIsOpen() {
+  return mealDialog.open || menuImportDialog.open || shoppingPriceDialog.open;
 }
 
 function editMeal(index) {
@@ -1020,9 +1037,9 @@ const menuDraftLink = document.getElementById('menuDraftLink');
 const menuMeals = document.getElementById('menuAll');
 menuSyncUnlock.addEventListener('click', () => syncUnlock.click());
 
-function openMealRecipe(index) {
+function renderMealRecipe(index) {
   const meal = meals[index];
-  if (!meal || meal.name === emptyMealName) return;
+  if (!meal || meal.name === emptyMealName) return false;
   const [, month, day] = offsetDay(menuWeek, index).split('-').map(Number);
   document.getElementById('recipeDate').textContent = `${meal.day} ${day}. ${monthNames[month - 1]}`;
   document.getElementById('recipeHeading').textContent = meal.name;
@@ -1044,35 +1061,52 @@ function openMealRecipe(index) {
   const instructions = meal.recipe?.instructions;
   document.getElementById('recipeInstructionsSection').hidden = !instructions;
   document.getElementById('recipeInstructions').textContent = instructions || '';
-  const link = recipeUrl(meal.url);
-  renderRecipeAttribution(meal, link, ingredients.length || instructions);
-  document.getElementById('recipeMissingInstructions').hidden = Boolean(!ingredients.length || instructions || link);
-  document.getElementById('recipeEmpty').hidden = Boolean(ingredients.length || instructions || link);
-  recipeDialog.showModal();
-  document.getElementById('recipeBody').scrollTop = 0;
-}
-
-function renderRecipeAttribution(meal, link, hasRecipe) {
-  const hostname = link ? new URL(link).hostname : '';
-  const site = hostname === 'www.kronan.is' || hostname === 'kronan.is' ? 'Krónan' : hostname.replace(/^www\./, '');
-  const origin = meal.source || site;
-  document.getElementById('recipeAttribution').hidden = !origin && !hasRecipe;
-  document.getElementById('recipeOrigin').textContent = origin ? 'Uppruni · ' + origin : 'Uppruni óskráður';
+  const { link, origin, sourceAction } = recipeAttribution(meal);
+  document.getElementById('recipeAttribution').hidden = !origin;
+  document.getElementById('recipeOrigin').textContent = origin;
   const source = document.getElementById('recipeSource');
   source.hidden = !link;
   if (link) {
     source.href = link;
-    source.textContent = site === 'Krónan' ? 'Opna uppskrift hjá Krónunni ↗' : `Opna uppskrift á ${site} ↗`;
+    source.textContent = sourceAction;
   } else {
     source.removeAttribute('href');
   }
+  document.getElementById('recipeMissingInstructions').hidden = Boolean(!ingredients.length || instructions || link);
+  document.getElementById('recipeEmpty').hidden = Boolean(ingredients.length || instructions || link);
+  return true;
+}
+
+function openMealRecipe(index) {
+  if (recipeDialog.open || !renderMealRecipe(index)) return;
+  openRecipeIndex = index;
+  recipeDialog.showModal();
+  document.getElementById('recipeBody').scrollTop = 0;
+}
+
+function recipeAttribution(meal) {
+  const link = recipeUrl(meal.url);
+  const hostname = link ? new URL(link).hostname : '';
+  const domain = hostname.replace(/^www\./, '');
+  const site = domain === 'kronan.is' ? 'Krónan' : domain;
+  const origin = meal.source?.trim() || site;
+  return { link, origin:origin ? `Uppruni · ${origin}`
+    : meal.ingredients?.length || meal.recipe?.instructions ? 'Uppruni óskráður' : '',
+    sourceAction:site === 'Krónan' ? 'Opna uppskrift hjá Krónunni ↗' : `Opna uppskrift á ${site} ↗` };
 }
 
 menuMeals.addEventListener('click', event => {
-  const button = event.target.closest('button[data-recipe-index]');
-  if (button) openMealRecipe(Number(button.dataset.recipeIndex));
+  const link = event.target.closest('a[data-recipe-index]');
+  if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  linkedRecipeDay = null;
+  openMealRecipe(Number(link.dataset.recipeIndex));
 });
 document.getElementById('closeRecipeDialog').addEventListener('click', () => recipeDialog.close());
+recipeDialog.addEventListener('close', () => {
+  if (document.activeElement === document.body) menuMeals.querySelector(`[data-recipe-index="${openRecipeIndex}"]`)?.focus();
+  openRecipeIndex = null;
+});
 
 function renderDraftLinks() {
   const links = [[homeDraftLink, draftWeeks.at(-1)], [menuDraftLink, draftWeeks.find(week => week !== menuWeek)]];
@@ -1121,13 +1155,17 @@ function renderMeals() {
     const dayKey = offsetDay(menuWeek, index);
     const [,month,day] = dayKey.split('-').map(Number);
     const date = `${day}.${month}.`;
+    const { link, origin, sourceAction } = recipeAttribution(meal);
+    const mealSummary = `<span class="meal-day">${xss(meal.day)} <small>${xss(date)}</small></span>
+      <span><strong>${xss(meal.name)}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}
+        ${origin ? `<small>${xss(origin)}</small>` : ''}
+        ${registered ? '<small class="meal-action">Skoða uppskrift</small>' : ''}</span>`;
+    const recipePath = `?vika=${menuWeek}&amp;rettur=${dayKey}`;
     return `<div class="menu-row">
-      <button class="meal-open" type="button" aria-haspopup="dialog" data-recipe-index="${index}" ${registered ? '' : 'disabled'}>
-        <span class="meal-day">${xss(meal.day)} <small>${xss(date)}</small></span>
-        <span><strong>${xss(meal.name)}</strong>${detail ? `<small>${xss(detail)}</small>` : ''}</span>
-        ${registered ? '<span aria-hidden="true">›</span>' : ''}
-      </button>
+      ${registered ? `<a class="meal-open" href="${recipePath}" aria-haspopup="dialog" data-recipe-index="${index}">${mealSummary}</a>`
+        : `<div class="meal-open">${mealSummary}</div>`}
       <button type="button" onclick="editMeal(${index})" aria-label="Breyta máltíð ${xss(meal.day)}" ${editingDisabled ? 'disabled' : ''}>${registered ? 'Breyta' : 'Skrá'}</button>
+      ${registered && link ? `<a class="meal-source" href="${xss(link)}" target="_blank" rel="noopener noreferrer">${xss(sourceAction)}</a>` : ''}
       <div class="menu-events" data-menu-day="${dayKey}"></div></div>`;
   }).join('');
   renderMenuEvents();
@@ -1665,6 +1703,10 @@ if (/^20\d{2}-\d{2}-\d{2}$/.test(requestedMenuWeek || '')) {
   const date = dateOf(requestedMenuWeek);
   if (Number.isFinite(date.valueOf()) && iso(date) === requestedMenuWeek && date.getUTCDay() === 1) {
     selectMenuWeek(requestedMenuWeek);
+    const requestedRecipeDay = pageUrl.searchParams.get('rettur');
+    if (Array.from({length:7}, (_, index) => offsetDay(requestedMenuWeek, index)).includes(requestedRecipeDay)) {
+      linkedRecipeDay = requestedRecipeDay;
+    }
     go('food');
   }
 }
