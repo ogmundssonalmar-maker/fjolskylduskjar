@@ -36,7 +36,7 @@ async function reserveGeneration(db, week) {
   return Boolean(meta.changes);
 }
 
-export async function loadKronanDinners(slugs, count = slugs.length, library = new Map()) {
+async function loadKronanDinners(slugs, count = slugs.length, library = new Map()) {
   const meals = [];
   for (let index = 0; index < slugs.length && meals.length < count; index += 4) {
     const batch = slugs.slice(index, index + 4);
@@ -46,7 +46,7 @@ export async function loadKronanDinners(slugs, count = slugs.length, library = n
   return meals.slice(0, count);
 }
 
-export function dateMenuDinners(week, meals) {
+function dateMenuDinners(week, meals) {
   const monday = new Date(`${week}T00:00:00Z`).getTime();
   return meals.map((meal, index) => ({ ...meal, date:new Date(monday + index * 86400000).toISOString().slice(0, 10) }));
 }
