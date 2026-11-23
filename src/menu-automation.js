@@ -44,7 +44,8 @@ function validateGeneratedMenu(data, week) {
       throw new Error('A dinner is missing ingredients or cooking instructions.');
     }
     const instructions = recipe.steps.map((step, index) => `${index + 1}. ${step.trim()}`).join('\n\n');
-    return { date, name, minutes, ingredients, recipe:{ title:recipe.title, servings:4, instructions } };
+    return { date, name, minutes, ingredients, source:'Samsett fyrir fjölskylduskjáinn með OpenAI',
+      recipe:{ title:recipe.title, servings:4, instructions } };
   });
   return importMeals({ week, meals }, week);
 }

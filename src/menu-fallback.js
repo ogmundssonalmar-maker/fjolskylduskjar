@@ -25,6 +25,7 @@ export function fallbackMenu(week) {
   const meals = dinners.map(([slug, name, minutes, ...steps], index) => {
     const { ingredients, servings } = defaultRecipes.get(slug);
     return { date:date(index), name, minutes, ingredients, url:`https://kronan.is/uppskriftir/${slug}`,
+      source:'Aðlöguð uppskrift frá Krónunni',
       recipe:{ title:name, servings, instructions:steps.map((step, i) => `${i + 1}. ${step}`).join('\n\n') } };
   });
   meals.push({ date:date(5), name:'Afgangadagur' }, { date:date(6), name:'Frjáls dagur' });

@@ -1,7 +1,7 @@
 import { CalendarError, addCalendarEvent, readCalendar } from './calendar.js';
 import { fillKronanIngredients } from './kronan.js';
 import { buildShopping, manualShoppingItem, menuSignature, validPrice, validWeek, weekStart } from './shopping.js';
-import { emptyMealName, emptyMenu, importMeals, normalizeRecipe, validIngredientLines, validMinutes, validRecipe, validRecipeUrl } from './menu-import.js';
+import { emptyMealName, emptyMenu, importMeals, normalizeRecipe, validIngredientLines, validMinutes, validRecipe, validRecipeSource, validRecipeUrl } from './menu-import.js';
 
 const response = (body, status = 200) => Response.json(body, {
   status,
@@ -125,15 +125,17 @@ function validMeals(meals) {
     && meals.every(meal => typeof meal?.name === 'string' && meal.name.trim().length > 0
       && meal.name.length <= 180 && typeof meal.day === 'string' && meal.day.length <= 4
       && validMinutes(meal.minutes) && (meal.ingredients === undefined || validIngredientLines(meal.ingredients))
-      && validRecipeUrl(meal.url) && validRecipe(meal.recipe));
+      && validRecipeUrl(meal.url) && validRecipe(meal.recipe) && validRecipeSource(meal.source));
 }
 
 function normalizeMeals(meals, previousMeals) {
-  return meals.map(({ day, name, minutes, url, ingredients, recipe }, index) => {
+  return meals.map(({ day, name, minutes, url, ingredients, recipe, source }, index) => {
     const previous = previousMeals[index];
-    const lines = ingredients ?? (previous?.name === name && previous?.url === url ? previous.ingredients : undefined);
+    const sameMeal = previous?.name === name && previous?.url === url;
+    const lines = ingredients ?? (sameMeal ? previous.ingredients : undefined);
+    const origin = source === undefined && sameMeal ? previous.source : source;
     return { day, name, minutes, url, ...(lines ? { ingredients: lines.map(line => line.trim()) } : {}),
-      ...(recipe ? { recipe:normalizeRecipe(recipe) } : {}) };
+      ...(recipe ? { recipe:normalizeRecipe(recipe) } : {}), ...(origin ? { source:origin.trim() } : {}) };
   });
 }
 

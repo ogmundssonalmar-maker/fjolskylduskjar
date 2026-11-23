@@ -430,7 +430,7 @@ test('JSON imports and meal edits stay private drafts until approval while price
   };
   const write = (method, data, origin) => call(path, method, data, cookie, origin);
   const recipe = { title:'Einföld súpa', servings:4, instructions:'Sjóðið tómatana.', extra:'strip this' };
-  const data = { week, meals:[{ date:week, name:'Tómatsúpa', ingredients:['500 g tómatar'], recipe },
+  const data = { week, meals:[{ date:week, name:'Tómatsúpa', ingredients:['500 g tómatar'], recipe, source:'  Matreiðslubókin  ' },
     { date:'2026-12-08', name:'Pasta', ingredients:['250 g pasta'] }] };
 
   assert.equal((await call(path)).status, 403);
@@ -449,6 +449,7 @@ test('JSON imports and meal edits stay private drafts until approval while price
   assert.equal(state.shopping, null);
   assert.equal(state.meals[6].name, 'Óskráð');
   assert.deepEqual(state.meals[0].recipe, { title:recipe.title, servings:4, instructions:recipe.instructions });
+  assert.equal(state.meals[0].source, 'Matreiðslubókin');
   assert.equal((await write('POST', { version:0, data })).status, 409);
   const action = async shoppingAction => {
     const response = await write('PUT', { ...await read(), shoppingAction });
@@ -457,6 +458,7 @@ test('JSON imports and meal edits stay private drafts until approval while price
   };
   state = await action({ type:'approve' });
   assert.equal(state.status, 'active');
+  assert.equal(state.activeMeals[0].source, 'Matreiðslubókin');
   assert.match(state.approvedAt, /^20\d\d-/);
   const tomato = state.shopping.items.find(item => item.name === 'tómatar');
   const pasta = state.shopping.items.find(item => item.name === 'pasta');
@@ -511,6 +513,7 @@ test('scheduled generation is opt-in, calls OpenAI once per week, and can only w
   const state = await (await household(request, env)).json();
   assert.equal(state.status, 'draft');
   assert.equal(state.meals[0].name, 'Súpa');
+  assert.equal(state.meals[0].source, 'Samsett fyrir fjölskylduskjáinn með OpenAI');
   assert.equal(state.meals[0].recipe.instructions, '1. Skerið gulræturnar niður.\n\n2. Sjóðið þær og maukið.');
   assert.equal(state.meals[6].recipe, undefined);
   assert.equal(state.home[week], null);
@@ -542,6 +545,7 @@ test('a missing recipe or an upstream failure uses complete saved recipes withou
       assert.equal(meal.recipe.servings, 4);
       assert.match(meal.recipe.instructions, /1\. .+\n\n2\. /);
       assert.match(meal.url, /^https:\/\/kronan\.is\/uppskriftir\//);
+      assert.equal(meal.source, 'Aðlöguð uppskrift frá Krónunni');
     }
     assert.deepEqual(meals.slice(5).map(meal => meal.name), ['Afgangadagur', 'Frjáls dagur']);
     await generateWeeklyDraft(env, scheduledTime);

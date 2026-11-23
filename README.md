@@ -62,7 +62,7 @@ Hver vika hefst á mánudegi og hefur eina færslu í `household_menu_weeks` í 
 
 - **Matseðill** sýnir drög sem má breyta. **Samþykkja matseðil** birtir útgáfuna á yfirlitinu og útbýr innkaupalista. Við síðari breytingar haldast síðasti samþykkti matseðillinn og listinn í gildi þar til drögin eru samþykkt.
 - **Innkaupin** geyma magn og einingu ef þau eru þekkt. Veljið **Verð** á vörulínu til að skrá heildarverð vörunnar fyrir skráð magn í ISK og merkja það **Áætlað** eða **Staðfest**. Auður verðreitur merkir óþekkt verð. Verð fyrir breytt magn þarf að skrá aftur. Samantekt sýnir staðfest verð, áætluð verð og fjölda vara án verðs.
-- Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu. Fyrir máltíð með Krónuuppskrift og auðan hráefnalista sækir Workerinn hráefni við samþykki og miðar við fjóra þegar skammtastærð er þekkt. Viðbótarvörur og verð eru skráð handvirkt í innkaupalistann.
+- Skrá má hráefni í **Breyta máltíð**, eitt í hverri línu, ásamt uppskriftaslóð og uppruna. Uppskriftarglugginn sýnir upprunann og tengilinn þegar þeir eru skráðir. Fyrir máltíð með Krónuuppskrift og auðan hráefnalista sækir Workerinn hráefni við samþykki og miðar við fjóra þegar skammtastærð er þekkt. Viðbótarvörur og verð eru skráð handvirkt í innkaupalistann.
 
 API slóðin er `/api/household/menu?week=YYYY-MM-DD`. `GET` skilar drögum, samþykktri útgáfu, innkaupalista og útgáfunúmeri. `PUT` vistar máltíðir eða aðgerð á innkaupalista. `shoppingAction.type = "approve"` samþykkir drögin. `POST` flytur gögn inn sem drög með `{ "version": 0, "data": { ... } }` þar sem `version` á að koma úr nýjasta lestri. Vistun krefst sama uppruna, JSON og gilds útgáfunúmers. Báðar aðferðir nota núverandi aðgangsstýringu og skila `409` ef önnur vistun varð á undan. Svör með matseðilsgögnum eru merkt `private, no-store`.
 
@@ -77,6 +77,7 @@ Veljið rétta viku undir **Matseðill → Flytja inn JSON**, límið gögnin in
     {
       "date": "2026-11-23",
       "name": "Tómatsúpa",
+      "source": "Fjölskylduuppskrift",
       "minutes": 30,
       "ingredients": ["500 g tómatar", "1 stk. laukur"],
       "recipe": {

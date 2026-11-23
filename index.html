@@ -93,7 +93,9 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 #recipeDialog h3{font-size:15px;margin:14px 0 5px}
 #recipeDialog ul{margin:0;padding-left:20px;overflow-wrap:anywhere}
 #recipeInstructions{white-space:pre-line;overflow-wrap:anywhere;margin:0}
-#recipeSource{display:inline-block;margin-top:14px}
+.recipe-attribution{margin:10px 0 0}
+.recipe-attribution .help{margin:0;overflow-wrap:anywhere}
+#recipeSource{display:inline-block;margin-top:4px;overflow-wrap:anywhere}
 #menuStage{margin:5px 0 9px}
 .menu-draft-link{display:inline-block;margin:4px 0 12px;color:var(--forest);font-weight:650;text-decoration:none}
 .menu-draft-link:hover{text-decoration:underline}
@@ -278,6 +280,10 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
   </header>
   <div class="recipe-body" id="recipeBody" tabindex="0" role="region" aria-label="Uppskrift">
     <p class="help" id="recipeDetails" hidden></p>
+    <div class="recipe-attribution" id="recipeAttribution" hidden>
+      <p class="help" id="recipeOrigin"></p>
+      <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden></a>
+    </div>
     <section id="recipeIngredientsSection" hidden>
       <h3>Hráefni</h3>
       <ul id="recipeIngredients"></ul>
@@ -287,7 +293,6 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       <p id="recipeInstructions"></p>
     </section>
     <p class="help" id="recipeMissingInstructions" hidden>Eldunarleiðbeiningar eru óskráðar.</p>
-    <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden>Opna uppskrift á vefnum ↗</a>
     <p class="help" id="recipeEmpty" hidden>Uppskrift er óskráð fyrir þessa máltíð.</p>
   </div>
 </dialog>
@@ -296,6 +301,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     <h2 id="mealDialogHeading">Breyta máltíð</h2>
     <label>Heiti <input name="mealName" required maxlength="180"></label>
     <label>Uppskriftaslóð <input name="url" type="url" maxlength="1024"></label>
+    <label>Uppruni uppskriftar <input name="recipeOrigin" maxlength="140" placeholder="T.d. Krónan eða heiti matreiðslubókar"></label>
     <label>Matreiðslutími í mínútum <input name="minutes" type="number" min="0" max="1440"></label>
     <label>Hráefni fyrir fjölskylduna <textarea name="ingredients" rows="6" aria-describedby="ingredientsHelp"
       placeholder="500 g hakk&#10;1 stk. laukur&#10;2 dl mjólk"></textarea></label>
@@ -927,6 +933,7 @@ function editMeal(index) {
   const fields = mealForm.elements;
   fields.mealName.value = meal.name === emptyMealName ? '' : meal.name;
   fields.url.value = meal.url;
+  fields.recipeOrigin.value = meal.source || '';
   fields.minutes.value = meal.minutes ?? '';
   fields.ingredients.value = (meal.ingredients || []).join('\n');
   fields.recipeTitle.value = meal.recipe?.title || '';
@@ -939,7 +946,7 @@ function editMeal(index) {
 document.getElementById('closeMealDialog').addEventListener('click', () => mealDialog.close());
 mealForm.addEventListener('submit', async event => {
   event.preventDefault();
-  const { mealName, url, ingredients, minutes, recipeTitle, servings, instructions } = Object.fromEntries(new FormData(mealForm));
+  const { mealName, url, recipeOrigin, ingredients, minutes, recipeTitle, servings, instructions } = Object.fromEntries(new FormData(mealForm));
   const lines = ingredients.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const link = recipeUrl(url.trim());
   if (!mealName.trim() || (url.trim() && !link) || lines.length > 48 || lines.some(line => line.length > 180)) {
@@ -951,12 +958,13 @@ mealForm.addEventListener('submit', async event => {
     const saved = await saveMenuChange(draft => {
       const previous = draft.meals[mealIndex];
       const name = mealName.trim();
+      const source = recipeOrigin.trim();
       const recipe = recipeTitle.trim() || servings || instructions.trim() ? {
         title:recipeTitle.trim() || name, ...(servings ? { servings:Number(servings) } : {}),
         ...(instructions.trim() ? { instructions:instructions.trim() } : {}),
       } : undefined;
       draft.meals[mealIndex] = { day:previous.day, name, url:link, ingredients:lines,
-        minutes:minutes === '' ? null : Number(minutes), ...(recipe ? { recipe } : {}) };
+        minutes:minutes === '' ? null : Number(minutes), ...(recipe ? { recipe } : {}), source:source || null };
     });
     if (saved) mealDialog.close();
     else mealDialogStatus.textContent = 'Breytingin vistaðist ekki. Reyndu aftur.';
@@ -1037,14 +1045,27 @@ function openMealRecipe(index) {
   document.getElementById('recipeInstructionsSection').hidden = !instructions;
   document.getElementById('recipeInstructions').textContent = instructions || '';
   const link = recipeUrl(meal.url);
-  const source = document.getElementById('recipeSource');
-  source.hidden = !link;
-  if (link) source.href = link;
-  else source.removeAttribute('href');
+  renderRecipeAttribution(meal, link, ingredients.length || instructions);
   document.getElementById('recipeMissingInstructions').hidden = Boolean(!ingredients.length || instructions || link);
   document.getElementById('recipeEmpty').hidden = Boolean(ingredients.length || instructions || link);
   recipeDialog.showModal();
   document.getElementById('recipeBody').scrollTop = 0;
+}
+
+function renderRecipeAttribution(meal, link, hasRecipe) {
+  const hostname = link ? new URL(link).hostname : '';
+  const site = hostname === 'www.kronan.is' || hostname === 'kronan.is' ? 'Krónan' : hostname.replace(/^www\./, '');
+  const origin = meal.source || site;
+  document.getElementById('recipeAttribution').hidden = !origin && !hasRecipe;
+  document.getElementById('recipeOrigin').textContent = origin ? 'Uppruni · ' + origin : 'Uppruni óskráður';
+  const source = document.getElementById('recipeSource');
+  source.hidden = !link;
+  if (link) {
+    source.href = link;
+    source.textContent = site === 'Krónan' ? 'Opna uppskrift hjá Krónunni ↗' : `Opna uppskrift á ${site} ↗`;
+  } else {
+    source.removeAttribute('href');
+  }
 }
 
 menuMeals.addEventListener('click', event => {

@@ -5,6 +5,7 @@ export const emptyMealName = 'Óskráð';
 export const emptyMenu = () => days.map(day => ({ day, name:emptyMealName, minutes:null, url:'' }));
 
 const isText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.length <= limit;
+export const validRecipeSource = source => source == null || isText(source, 140);
 export const validIngredientLines = lines => Array.isArray(lines) && lines.length <= 48 && lines.every(line => isText(line, 180));
 export const validMinutes = value => value === null || (Number.isInteger(value) && value >= 0 && value <= 1440);
 export const validRecipeUrl = value => typeof value === 'string' && value.length <= 1024 &&
@@ -32,13 +33,13 @@ export function importMeals(data, week, base = emptyMenu()) {
     const index = dates.indexOf(input?.date);
     if (index < 0 || seen.has(index)) throw new Error('Hver máltíð þarf einstaka dagsetningu innan valinnar viku.');
     seen.add(index);
-    const { name, minutes = null, url = '', ingredients = [], recipe } = input;
+    const { name, minutes = null, url = '', ingredients = [], recipe, source } = input;
     if (!isText(name, 180) || !validMinutes(minutes) || !validRecipeUrl(url) ||
-        !validIngredientLines(ingredients) || !validRecipe(recipe)) {
+        !validIngredientLines(ingredients) || !validRecipe(recipe) || !validRecipeSource(source)) {
       throw new Error(`Athugaðu heiti, uppskrift og hráefni fyrir ${dates[index]}.`);
     }
     meals[index] = { day:days[index], name:name.trim(), minutes, url, ingredients:ingredients.map(line => line.trim()),
-      ...(recipe ? { recipe:normalizeRecipe(recipe) } : {}) };
+      ...(recipe ? { recipe:normalizeRecipe(recipe) } : {}), ...(source ? { source:source.trim() } : {}) };
   }
   return meals;
 }
