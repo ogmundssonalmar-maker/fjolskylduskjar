@@ -101,8 +101,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
 .recipe-attribution{background:var(--mint);border:1px solid var(--border);border-radius:9px;margin:12px 0;padding:10px 12px;overflow-wrap:anywhere}
 .recipe-attribution p{margin:0}
 #recipeOrigin{font-weight:650}
-.recipe-link-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:6px}
-#copyRecipeMessage{color:var(--forest)}
+#recipeLink{display:inline-block;margin-top:6px}
 #menuStage{margin:5px 0 9px}
 .menu-draft-link{display:inline-block;margin:4px 0 12px;color:var(--forest);font-weight:650;text-decoration:none}
 .menu-draft-link:hover{text-decoration:underline}
@@ -289,12 +288,7 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
     <div class="recipe-attribution" id="recipeAttribution" hidden>
       <p id="recipeOrigin"></p>
       <p class="help" id="recipeNoSourceUrl" hidden>Engin slóð á ytri uppskrift er skráð.</p>
-      <div class="recipe-link-actions">
-        <a id="recipeSource" target="_blank" rel="noopener noreferrer" hidden></a>
-        <button class="outline" type="button" id="copyRecipeLink" hidden>Afrita hlekk á uppskrift</button>
-      </div>
-      <input id="recipeLinkAddress" type="url" aria-label="Hlekkur á uppskrift á fjölskylduskjánum" readonly hidden>
-      <p class="help" id="copyRecipeMessage" role="status"></p>
+      <a id="recipeLink" target="_blank" rel="noopener noreferrer" hidden></a>
     </div>
     <p class="help" id="recipeDetails" hidden></p>
     <section id="recipeIngredientsSection" hidden>
@@ -1044,9 +1038,6 @@ const menuSyncUnlock = document.getElementById('menuSyncUnlock');
 const homeDraftLink = document.getElementById('homeDraftLink');
 const menuDraftLink = document.getElementById('menuDraftLink');
 const menuMeals = document.getElementById('menuAll');
-const recipeLinkAddress = document.getElementById('recipeLinkAddress');
-const copyRecipeLink = document.getElementById('copyRecipeLink');
-const copyRecipeMessage = document.getElementById('copyRecipeMessage');
 menuSyncUnlock.addEventListener('click', () => syncUnlock.click());
 
 function recipePath(day) {
@@ -1079,23 +1070,17 @@ function renderMealRecipe(index) {
   document.getElementById('recipeInstructionsSection').hidden = !instructions;
   document.getElementById('recipeInstructions').textContent = instructions || '';
   const { link, origin, sourceAction } = recipeAttribution(meal);
-  const canCopy = menuVersion > 0 && Boolean(ingredients.length || instructions || link);
-  copyRecipeLink.hidden = !canCopy;
-  recipeLinkAddress.value = canCopy ? new URL(recipePath(recipeDay), location.href).href : '';
-  if (!canCopy) {
-    recipeLinkAddress.hidden = true;
-    copyRecipeMessage.textContent = '';
-  }
   document.getElementById('recipeAttribution').hidden = !origin;
   document.getElementById('recipeOrigin').textContent = origin;
   document.getElementById('recipeNoSourceUrl').hidden = Boolean(link);
-  const source = document.getElementById('recipeSource');
-  source.hidden = !link;
-  if (link) {
-    source.href = link;
-    source.textContent = sourceAction;
+  const recipeLink = document.getElementById('recipeLink');
+  const address = link || (menuVersion > 0 && (ingredients.length || instructions) ? recipePath(recipeDay) : '');
+  recipeLink.hidden = !address;
+  if (address) {
+    recipeLink.href = address;
+    recipeLink.textContent = link ? sourceAction : 'Opna uppskrift á fjölskylduskjánum ↗';
   } else {
-    source.removeAttribute('href');
+    recipeLink.removeAttribute('href');
   }
   document.getElementById('recipeMissingInstructions').hidden = Boolean(!ingredients.length || instructions || link);
   document.getElementById('recipeEmpty').hidden = Boolean(ingredients.length || instructions || link);
@@ -1104,8 +1089,6 @@ function renderMealRecipe(index) {
 
 function openMealRecipe(index) {
   if (recipeDialog.open || !renderMealRecipe(index)) return;
-  recipeLinkAddress.hidden = true;
-  copyRecipeMessage.textContent = '';
   openRecipeIndex = index;
   recipeDialog.showModal();
   document.getElementById('recipeBody').scrollTop = 0;
@@ -1121,21 +1104,6 @@ function recipeAttribution(meal) {
     : meal.ingredients?.length || meal.recipe?.instructions ? 'Uppruni óskráður' : '',
     sourceAction:site === 'Krónan' ? 'Opna uppskrift hjá Krónunni ↗' : `Opna uppskrift á ${site} ↗` };
 }
-
-copyRecipeLink.addEventListener('click', async () => {
-  const address = recipeLinkAddress.value;
-  const index = openRecipeIndex;
-  try {
-    await navigator.clipboard.writeText(address);
-    if (recipeDialog.open && openRecipeIndex === index) copyRecipeMessage.textContent = 'Hlekkur afritaður.';
-  } catch {
-    if (!recipeDialog.open || openRecipeIndex !== index) return;
-    recipeLinkAddress.hidden = false;
-    recipeLinkAddress.focus();
-    recipeLinkAddress.select();
-    copyRecipeMessage.textContent = 'Afritaðu slóðina úr reitnum.';
-  }
-});
 
 menuMeals.addEventListener('click', event => {
   const link = event.target.closest('a[data-recipe-index]');
