@@ -4,13 +4,9 @@ import { trips } from './trips.js';
 import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
 import { generateWeeklyDraft } from './menu-automation.js';
-import { rerunSubmittedWeek } from './menu-rerun.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
-  const { pathname, hostname } = new URL(request.url);
-  if (pathname === '/api/_deployment/rerun-menu' && hostname === 'fjolskylduskjar.ogmundssonalmar.workers.dev') {
-    return rerunSubmittedWeek(request, env);
-  }
+  const { pathname } = new URL(request.url);
   if (pathname === '/api/calendar' && request.method === 'GET') {
     return household(request, env);
   }
