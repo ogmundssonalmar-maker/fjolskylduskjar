@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { household, readApprovedShopping } from '../src/household.js';
-import { readCalendar } from '../src/calendar.js';
+import { addCalendarEvent, readCalendar } from '../src/calendar.js';
 import { generateWeeklyDraft, kronanDinnerCatalog } from '../src/menu-automation.js';
 import { weekStart } from '../src/shopping.js';
 import worker from '../src/worker.js';
@@ -184,7 +184,6 @@ test('calendar links and household-authorized writes use only the configured fam
 });
 
 test('multi-day events include the last date and support overnight timed events', async t => {
-  const { addCalendarEvent } = await import('../src/calendar.js');
   const env = {
     GOOGLE_CALENDAR_WRITES_ENABLED: 'true',
     GOOGLE_CALENDAR_IDS: 'family-calendar',
@@ -219,6 +218,56 @@ test('multi-day events include the last date and support overnight timed events'
   }
 });
 
+test('recurring and single events write distinct Google Calendar rules and retry safely', async t => {
+  const env = {
+    GOOGLE_CALENDAR_WRITES_ENABLED:'true', GOOGLE_CALENDAR_IDS:'family-calendar',
+    GOOGLE_CLIENT_ID:'client', GOOGLE_CLIENT_SECRET:'secret', GOOGLE_REFRESH_TOKEN:'refresh',
+  };
+  const draft = { id:'12345678123412341234123456789abc', title:'Æfing', date:'2026-11-23', owner:'children' };
+  const existingLink = 'https://calendar.google.com/calendar/event?eid=existing';
+  let saved;
+  let conflict = false;
+  const google = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).includes('oauth2.googleapis.com')) return Response.json({ access_token:'token' });
+    if (options.method !== 'POST') return Response.json({ ...saved,
+      recurrence:['RRULE:COUNT=4;WKST=SU;FREQ=WEEKLY;INTERVAL=1'], htmlLink:existingLink });
+    if (conflict) return new Response(null, { status:409 });
+    saved = JSON.parse(options.body);
+    return Response.json({});
+  });
+  await addCalendarEvent(env, draft);
+  assert.equal(saved.recurrence, undefined);
+  await addCalendarEvent(env, { ...draft, recurrence:{ frequency:'daily' } });
+  assert.deepEqual(saved.recurrence, ['RRULE:FREQ=DAILY']);
+  await addCalendarEvent(env, { ...draft, endDate:'2026-11-24', recurrence:{ frequency:'biweekly', until:'2026-12-21' } });
+  assert.deepEqual(saved.start, { date:'2026-11-23' });
+  assert.deepEqual(saved.end, { date:'2026-11-25' });
+  assert.deepEqual(saved.recurrence, ['RRULE:FREQ=WEEKLY;INTERVAL=2;UNTIL=20261221']);
+  await addCalendarEvent(env, { ...draft, startTime:'17:15', endTime:'18:00', recurrence:{ frequency:'monthly', until:'2027-01-23' } });
+  assert.deepEqual(saved.start, { dateTime:'2026-11-23T17:15:00Z', timeZone:'Atlantic/Reykjavik' });
+  assert.deepEqual(saved.recurrence, ['RRULE:FREQ=MONTHLY;UNTIL=20270123T235959Z']);
+  await addCalendarEvent(env, { ...draft, recurrence:{ frequency:'yearly' } });
+  assert.deepEqual(saved.recurrence, ['RRULE:FREQ=YEARLY']);
+
+  const weekly = { ...draft, recurrence:{ frequency:'weekly', count:4 } };
+  await addCalendarEvent(env, weekly);
+  assert.deepEqual(saved.recurrence, ['RRULE:FREQ=WEEKLY;COUNT=4']);
+  conflict = true;
+  assert.deepEqual(await addCalendarEvent(env, weekly), { htmlLink:existingLink });
+  await assert.rejects(addCalendarEvent(env, { ...weekly, recurrence:{ frequency:'weekly', count:5 } }), { code:'google_calendar_http_409' });
+  await assert.rejects(addCalendarEvent(env, draft), { code:'google_calendar_http_409' });
+  const calls = google.mock.callCount();
+  for (const recurrence of [null, { frequency:'HOURLY' }, { frequency:'weekly', until:'2026-11-22' },
+    { frequency:'daily', until:'2026-11-31' }, { frequency:'daily', until:'2026-11-30', count:2 },
+    { frequency:'weekly', count:0 }, { frequency:'weekly', count:2.5 }, { frequency:'weekly', count:'2' }]) {
+    const request = new Request('https://example.com/api/calendar/events', { method:'POST',
+      headers:{ Origin:'https://example.com', 'Content-Type':'application/json' }, body:JSON.stringify({ ...draft, recurrence }) });
+    const response = await household(request, env);
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /tíðni/);
+  }
+  assert.equal(google.mock.callCount(), calls);
+});
 
 test('trips retry the same Google event and keep each checklist private', async t => {
   const base = 'https://example.com';

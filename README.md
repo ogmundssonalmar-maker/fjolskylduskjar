@@ -56,6 +56,8 @@ Eigandi hefur samþykkt skrifaðgang fyrir Fjölskyldudagatalið. Til að virkja
 
 Áður en nýr viðburður er vistaður þarf að virkja samstillingu með breytingakóðanum. Viðburðurinn fer á sameiginlega dagatalið. Litaflokkurinn er vistaður með viðburðinum svo hann skili sér í mánaðarsýninni og í Google Calendar.
 
+Í **Bæta við viðburði** má velja daglega, vikulega, aðra hverja viku, mánaðarlega eða árlega endurtekningu. Röðin getur verið ótímabundin, endað á ákveðnum degi eða eftir tiltekinn fjölda skipta, að fyrsta viðburðinum meðtöldum. Google Calendar geymir röðina og fjölskylduskjárinn sækir einstök skipti í dagatalssýnina.
+
 ## Vikumatseðill og innkaupalisti
 
 Hver vika hefst á mánudegi og hefur eina færslu í `household_menu_weeks` í D1. Færslan geymir drögin, síðustu samþykktu útgáfu, samþykktartíma og innkaupalistann. Máltíð geymir heiti, tíma, hráefni og valfrjálsa uppskriftaslóð, heiti uppskriftar, skammta og leiðbeiningar. Sérstök D1-mígrun er óþörf fyrir nýju reitina. Eldri samþykktir listar varðveitast. Þegar drög höfðu breyst frá samþykki eru heiti og hráefni samþykktrar útgáfu lesin úr eldri innkaupalistanum.

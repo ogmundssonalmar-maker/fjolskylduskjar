@@ -111,6 +111,34 @@ export function dateAtMidnight(date) {
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? time : NaN;
 }
 
+const repeatRules = { daily:'DAILY', weekly:'WEEKLY', biweekly:'WEEKLY;INTERVAL=2', monthly:'MONTHLY', yearly:'YEARLY' };
+
+function eventRecurrence(settings, start) {
+  if (settings === undefined) return undefined;
+  if (typeof settings?.frequency !== 'string' || !Object.hasOwn(repeatRules, settings.frequency)) {
+    throw new CalendarError('invalid_calendar_recurrence');
+  }
+  const { frequency, until, count } = settings;
+  let rule = 'RRULE:FREQ=' + repeatRules[frequency];
+  if (until !== undefined) {
+    const endDay = dateAtMidnight(until);
+    if (count !== undefined || !Number.isFinite(endDay) || until < (start.date || start.dateTime.slice(0, 10))) {
+      throw new CalendarError('invalid_calendar_recurrence');
+    }
+    rule += ';UNTIL=' + until.replaceAll('-', '') + (start.dateTime ? 'T235959Z' : '');
+  } else if (count !== undefined) {
+    if (!Number.isSafeInteger(count) || count < 1) throw new CalendarError('invalid_calendar_recurrence');
+    rule += ';COUNT=' + count;
+  }
+  return [rule];
+}
+
+function sameRecurrence(left = [], right = []) {
+  const ordered = rules => rules.map(rule => rule.startsWith('RRULE:')
+    ? rule.slice(6).split(';').filter(part => part !== 'INTERVAL=1' && !part.startsWith('WKST=')).sort().join(';') : rule).sort();
+  return JSON.stringify(ordered(left)) === JSON.stringify(ordered(right));
+}
+
 function newCalendarEvent(input, trip) {
   if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 160 ||
       typeof input.id !== 'string' || !/^[0-9a-f]{32}$/.test(input.id) ||
@@ -137,8 +165,10 @@ function newCalendarEvent(input, trip) {
     };
     if (Date.parse(end.dateTime) <= Date.parse(start.dateTime)) return null;
   }
+  const recurrence = eventRecurrence(input.recurrence, start);
   return {
     id: input.id, summary: input.title.trim(), start, end, colorId: owners[input.owner],
+    ...(recurrence ? { recurrence } : {}),
     extendedProperties: { private: { dashboardOwner: input.owner, ...(trip ? { dashboardEventType: 'trip' } : {}) } },
   };
 }
@@ -164,7 +194,7 @@ export async function addCalendarEvent(env, input, { trip = false } = {}) {
         ? left.date === right.date
         : Date.parse(left?.dateTime) === Date.parse(right.dateTime);
       if (existing.summary === event.summary && sameTime(existing.start, event.start) &&
-          sameTime(existing.end, event.end) &&
+          sameTime(existing.end, event.end) && sameRecurrence(existing.recurrence, event.recurrence) &&
           existing.extendedProperties?.private?.dashboardOwner === input.owner &&
           (!trip || existing.extendedProperties?.private?.dashboardEventType === 'trip')) {
         return { htmlLink: googleEventLink(existing.htmlLink) };

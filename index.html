@@ -260,6 +260,19 @@ a.month-event:hover,.agenda-title a:hover{text-decoration:underline}
       <option value="family">Fjölskylduna</option><option value="almar">Almar</option>
       <option value="oddny">Oddnýju</option><option value="children">Börnin</option>
     </select></label>
+    <label>Endurtekning <select name="repeatFrequency">
+      <option value="">Einungis einu sinni</option><option value="daily">Daglega</option>
+      <option value="weekly">Vikulega</option><option value="biweekly">Aðra hverja viku</option>
+      <option value="monthly">Mánaðarlega</option><option value="yearly">Árlega</option>
+    </select></label>
+    <div id="eventRepeatDetails" hidden>
+      <label>Endurtekningu lýkur <select name="repeatEnd" disabled>
+        <option value="">Enginn lokadagur</option><option value="date">Á ákveðnum degi</option>
+        <option value="count">Eftir ákveðinn fjölda skipta</option>
+      </select></label>
+      <label id="eventRepeatUntil" hidden>Endurtaka til og með <input name="repeatUntil" type="date" disabled></label>
+      <label id="eventRepeatCount" hidden>Fjöldi skipta, með fyrsta viðburðinum <input name="repeatCount" type="number" min="1" step="1" disabled></label>
+    </div>
     <p id="eventDialogStatus" class="help" role="status"></p>
     <div class="month-controls">
       <button class="outline" type="button" id="closeEventDialog">Hætta við</button>
@@ -581,12 +594,20 @@ const eventDialogStatus = document.getElementById('eventDialogStatus');
 const eventSubmit = document.getElementById('eventSubmit');
 let eventDraftId;
 function updateEventDateConstraints() {
-  const { date, endDate, startTime, endTime } = eventForm.elements;
+  const { date, endDate, startTime, endTime, repeatFrequency, repeatEnd, repeatUntil, repeatCount } = eventForm.elements;
   endDate.min = date.value;
   startTime.required = Boolean(endTime.value);
   endTime.required = Boolean(startTime.value && endDate.value > date.value);
+  const repeating = Boolean(repeatFrequency.value);
+  document.getElementById('eventRepeatDetails').hidden = repeatEnd.disabled = !repeating;
+  document.getElementById('eventRepeatUntil').hidden = repeatUntil.disabled = !repeating || repeatEnd.value !== 'date';
+  document.getElementById('eventRepeatCount').hidden = repeatCount.disabled = !repeating || repeatEnd.value !== 'count';
+  repeatUntil.min = date.value;
+  repeatUntil.required = !repeatUntil.disabled;
+  repeatCount.required = !repeatCount.disabled;
 }
 eventForm.addEventListener('input', updateEventDateConstraints);
+eventForm.addEventListener('change', updateEventDateConstraints);
 function setEventWriteStatus(text) {
   eventWriteStatus.textContent = text;
   eventWriteStatus.hidden = !text;
@@ -609,10 +630,22 @@ document.getElementById('openEventDialog').addEventListener('click', () => {
   eventDialogStatus.textContent = '';
   eventDialog.showModal();
 });
-document.getElementById('closeEventDialog').addEventListener('click', () => eventDialog.close());
+document.getElementById('closeEventDialog').addEventListener('click', () => {
+  if (!eventSubmit.disabled) eventDialog.close();
+});
+eventDialog.addEventListener('cancel', event => {
+  if (eventSubmit.disabled) event.preventDefault();
+});
 eventForm.addEventListener('submit', async event => {
   event.preventDefault();
-  const draft = { ...Object.fromEntries(new FormData(eventForm)), id: eventDraftId };
+  if (eventSubmit.disabled) return;
+  const { repeatFrequency, repeatEnd, repeatUntil, repeatCount, ...fields } = Object.fromEntries(new FormData(eventForm));
+  const draft = { ...fields, id:eventDraftId };
+  if (repeatFrequency) {
+    draft.recurrence = { frequency:repeatFrequency };
+    if (repeatEnd === 'date') draft.recurrence.until = repeatUntil;
+    if (repeatEnd === 'count') draft.recurrence.count = Number(repeatCount);
+  }
   eventDialogStatus.textContent = '';
   eventSubmit.disabled = true;
   try {
@@ -630,7 +663,7 @@ eventForm.addEventListener('submit', async event => {
     shownMonth = draft.date.slice(0, 7);
     selectedDay = draft.date;
     monthCalendar.clear();
-    setEventWriteStatus('Viðburður vistaður í Google Calendar.');
+    setEventWriteStatus(draft.recurrence ? 'Endurtekinn viðburður vistaður í Google Calendar.' : 'Viðburður vistaður í Google Calendar.');
     renderMonth();
     await Promise.all([refreshCalendar(), refreshMonth()]);
   } catch {

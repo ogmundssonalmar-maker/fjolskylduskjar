@@ -280,6 +280,9 @@ export async function household(request, env) {
       if (error.code === 'invalid_calendar_event') {
         return response({ error: 'Athugaðu dagsetningu og tímasetningu viðburðarins.' }, 400);
       }
+      if (error.code === 'invalid_calendar_recurrence') {
+        return response({ error: 'Athugaðu tíðni, lokadag eða fjölda endurtekninga.' }, 400);
+      }
       if (error.code === 'google_calendar_http_409') {
         return response({ error: 'Viðburður var þegar vistaður. Lokaðu glugganum og endurhladdu dagskránni.' }, 409);
       }
