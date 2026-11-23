@@ -4,9 +4,11 @@ import { trips } from './trips.js';
 import { todo, todoCallback } from './todo.js';
 import { hasHouseholdSession, openHouseholdSession } from './household-session.js';
 import { generateWeeklyDraft } from './menu-automation.js';
+import { refreshKronanDraft } from './kronan-draft-update.js';
 
 export async function serveWorker(request, env, assets = env.ASSETS) {
   const { pathname } = new URL(request.url);
+  if (pathname === '/api/_deployment/kronan-draft') return refreshKronanDraft(request, env);
   if (pathname === '/api/calendar' && request.method === 'GET') {
     return household(request, env);
   }
