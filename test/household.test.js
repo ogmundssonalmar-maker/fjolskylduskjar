@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { household, readApprovedShopping } from '../src/household.js';
 import { readCalendar } from '../src/calendar.js';
-import { generateWeeklyDraft } from '../src/menu-automation.js';
+import { generateWeeklyDraft, kronanDinnerCatalog } from '../src/menu-automation.js';
 import { weekStart } from '../src/shopping.js';
 import worker from '../src/worker.js';
 
@@ -586,6 +586,27 @@ test('invalid model selections use the catalog and a Krónan outage uses complet
   const calls = fetchMock.mock.callCount();
   await generateWeeklyDraft(noKey, scheduledTime);
   assert.equal(fetchMock.mock.callCount(), calls);
+});
+
+test('weekly drafts can use the verified Krónan library without an upstream connection', async t => {
+  const DB = testD1(t);
+  DB.prepare('CREATE TABLE kronan_recipe_library (id INTEGER PRIMARY KEY, recipes TEXT NOT NULL)').run();
+  const library = Object.fromEntries(kronanDinnerCatalog.map(([slug, name]) => [slug, {
+    name, minutes:30, source:'Krónan', url:`https://kronan.is/uppskriftir/${slug}`,
+    ingredients:['500 g gulrætur'], recipe:{ title:name, servings:4, instructions:'Skerið og sjóðið gulræturnar.' },
+  }]));
+  DB.prepare('INSERT INTO kronan_recipe_library VALUES (1, ?)').bind(JSON.stringify(library)).run();
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response(null, { status:503 }));
+  const env = { DB, WEEKLY_MENU_AUTOMATION_ENABLED:'true' };
+  await generateWeeklyDraft(env, Date.parse('2026-12-06T17:00:00Z'));
+  const request = new Request('https://example.com/api/household/menu?week=2026-12-07');
+  const draft = await (await household(request, env)).json();
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(draft.status, 'draft');
+  assert.equal(draft.activeMeals, null);
+  assert.equal(draft.meals.length, 7);
+  assert.equal(new Set(draft.meals.map(meal => meal.url)).size, 7);
+  assert.ok(draft.meals.every(meal => meal.source === 'Krónan' && meal.recipe.instructions));
 });
 
 test('the current week response shows upcoming drafts to authenticated household members', async t => {

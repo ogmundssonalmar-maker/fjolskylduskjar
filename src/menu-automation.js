@@ -1,11 +1,11 @@
 import { menuWeekExists, saveGeneratedMenu } from './household.js';
-import { fetchKronanDinner } from './kronan.js';
+import { fetchKronanDinner, readKronanLibrary } from './kronan.js';
 import { fallbackMenu } from './menu-fallback.js';
 import { importMeals } from './menu-import.js';
 import { weekStart } from './shopping.js';
 
 // Four-serving dinners from the Krónan recipe collection.
-const catalog = [
+export const kronanDinnerCatalog = [
   ['plokkfiskur', 'Plokkfiskur'],
   ['rjomapesto_kjuklingur', 'Rjóma pestó kjúklingur'],
   ['kjotbollur_vidirholm', 'Ítalskar kjötbollur'],
@@ -36,11 +36,11 @@ async function reserveGeneration(db, week) {
   return Boolean(meta.changes);
 }
 
-export async function loadKronanDinners(slugs, count = slugs.length) {
+export async function loadKronanDinners(slugs, count = slugs.length, library = new Map()) {
   const meals = [];
   for (let index = 0; index < slugs.length && meals.length < count; index += 4) {
     const batch = slugs.slice(index, index + 4);
-    const recipes = await Promise.all(batch.map(slug => fetchKronanDinner(slug).catch(() => null)));
+    const recipes = await Promise.all(batch.map(slug => library.get(slug) || fetchKronanDinner(slug).catch(() => null)));
     meals.push(...recipes.filter(Boolean));
   }
   return meals.slice(0, count);
@@ -59,13 +59,13 @@ export async function generateWeeklyDraft(env, scheduledTime) {
   const week = weekStart(next);
   if (await menuWeekExists(env.DB, week) || !await reserveGeneration(env.DB, week)) return;
 
-  const offset = Math.floor(next.getTime() / (7 * 86400000)) % catalog.length;
-  const candidates = [...catalog.slice(offset), ...catalog.slice(0, offset)];
+  const offset = Math.floor(next.getTime() / (7 * 86400000)) % kronanDinnerCatalog.length;
+  const candidates = [...kronanDinnerCatalog.slice(offset), ...kronanDinnerCatalog.slice(0, offset)];
   const selected = env.OPENAI_API_KEY && env.OPENAI_MENU_MODEL
     ? await chooseDinners(env, week, candidates).catch(() => []) : [];
   const choices = [...new Set([...selected, ...candidates.map(([slug]) => slug)])].slice(0, 12);
-  const dinners = await loadKronanDinners(choices, 7);
-  if (dinners.length < 7) console.warn('Weekly menu used saved Krónan recipes because the live catalog was incomplete.');
+  const dinners = await loadKronanDinners(choices, 7, await readKronanLibrary(env.DB));
+  if (dinners.length < 7) console.warn('Weekly menu used adapted Krónan recipes because the catalog was incomplete.');
   const meals = dinners.length === 7 ? importMeals({ week, meals:dateMenuDinners(week, dinners) }, week) : fallbackMenu(week);
   await saveGeneratedMenu(env.DB, week, meals);
 }

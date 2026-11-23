@@ -51,6 +51,16 @@ export async function fetchKronanDinner(slug) {
     url:recipe.recipeButton.url, ingredients:sourceLines, recipe:details, source:'Krónan' };
 }
 
+export async function readKronanLibrary(db) {
+  try {
+    const row = await db.prepare('SELECT recipes FROM kronan_recipe_library WHERE id = 1').first();
+    return new Map(Object.entries(row ? JSON.parse(row.recipes) : {}));
+  } catch (error) {
+    if (!/no such table: kronan_recipe_library\b/i.test(error?.message ?? '')) throw error;
+    return new Map();
+  }
+}
+
 export async function fillKronanIngredients(meals) {
   const lookups = new Map();
   return Promise.all(meals.map(async meal => {
